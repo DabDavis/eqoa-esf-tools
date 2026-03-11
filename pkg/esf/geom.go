@@ -118,3 +118,14 @@ func (b Box) IsEmpty() bool {
 func (b Box) ContainsXZ(p Point) bool {
 	return b.MinX < p.X && b.MaxX > p.X && b.MinZ < p.Z && b.MaxZ > p.Z
 }
+
+// HashResourceID computes the PS2 VIHashResourceID hash for a named resource.
+// This is the DictID used to look up sprites/resources in ESF files.
+// Algorithm: hash = hash * 131 + byte, for each byte in the name.
+func HashResourceID(name string) int32 {
+	var hash int32
+	for i := 0; i < len(name); i++ {
+		hash = hash*131 + int32(int8(name[i]))
+	}
+	return hash
+}

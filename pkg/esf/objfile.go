@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 // ObjInfo represents a node in the ESF object tree.
@@ -80,7 +81,8 @@ type ObjFile struct {
 	dict     map[int32]*ObjInfo
 	objCache map[int]Object
 
-	Debug bool
+	Debug   bool
+	ISOBase int64 // byte offset of TUNARIA data within the ISO (0 for standalone ESF)
 }
 
 // Object is implemented by all parsed ESF objects.
@@ -89,13 +91,66 @@ type Object interface {
 	ObjInfo() *ObjInfo
 }
 
-// Open parses an ESF file from disk.
+// Open parses an ESF file from disk. If the path ends in .iso,
+// it extracts TUNARIA.ESF from the ISO at the known sector offset.
 func Open(path string) (*ObjFile, error) {
+	if strings.HasSuffix(strings.ToLower(path), ".iso") {
+		return OpenISO(path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	return OpenBytes(data)
+}
+
+// OpenISO extracts TUNARIA.ESF from an EQOA ISO image.
+// TUNARIA.ESF occupies sectors 520000–1006934 on disc.
+func OpenISO(isoPath string) (*ObjFile, error) {
+	const (
+		sectorSize         = 2048
+		tunariaStartSector = 520000
+		tunariaEndSector   = 1006934
+		tunariaByteOffset  = tunariaStartSector * sectorSize // 1064960000
+		tunariaByteSize    = (tunariaEndSector - tunariaStartSector) * sectorSize
+	)
+
+	fd, err := os.Open(isoPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+
+	// Verify the ISO has OBJF at the TUNARIA offset
+	if _, err := fd.Seek(int64(tunariaByteOffset), 0); err != nil {
+		return nil, fmt.Errorf("ISO seek to TUNARIA offset: %w", err)
+	}
+
+	data := make([]byte, tunariaByteSize)
+	n, err := fd.Read(data)
+	if err != nil {
+		return nil, fmt.Errorf("ISO read TUNARIA: %w", err)
+	}
+	data = data[:n]
+
+	// Verify OBJF magic
+	if len(data) < 32 {
+		return nil, fmt.Errorf("TUNARIA data too small (%d bytes)", len(data))
+	}
+	magic := string([]byte{data[3], data[2], data[1], data[0]})
+	if magic != "OBJF" {
+		return nil, fmt.Errorf("no OBJF magic at ISO offset 0x%x, got %q", tunariaByteOffset, magic)
+	}
+
+	f := &ObjFile{
+		data:     data,
+		objCache: make(map[int]Object),
+		ISOBase:  int64(tunariaByteOffset),
+	}
+	if err := f.readFileHeader(); err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // OpenBytes parses an ESF file from a byte slice.
@@ -371,6 +426,8 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 }
 
 // RawBytes returns a slice of the underlying file data.
+func (f *ObjFile) Data() []byte { return f.data }
+
 func (f *ObjFile) RawBytes(offset, size int) []byte {
 	end := offset + size
 	if end > len(f.data) {

@@ -97,6 +97,17 @@ func (w *ESFWriter) WriteUint16(v uint16)  { w.buf = binary.LittleEndian.AppendU
 func (w *ESFWriter) WriteInt16(v int16)    { w.buf = binary.LittleEndian.AppendUint16(w.buf, uint16(v)) }
 func (w *ESFWriter) WriteInt32(v int32)    { w.buf = binary.LittleEndian.AppendUint32(w.buf, uint32(v)) }
 func (w *ESFWriter) WriteUint32(v uint32)  { w.buf = binary.LittleEndian.AppendUint32(w.buf, v) }
+func (w *ESFWriter) WriteUint64(v uint64)  { w.buf = binary.LittleEndian.AppendUint64(w.buf, v) }
+
+// PatchUint32At overwrites 4 bytes at the given buffer offset.
+func (w *ESFWriter) PatchUint32At(offset int, v uint32) {
+	binary.LittleEndian.PutUint32(w.buf[offset:], v)
+}
+
+// PatchUint64At overwrites 8 bytes at the given buffer offset.
+func (w *ESFWriter) PatchUint64At(offset int, v uint64) {
+	binary.LittleEndian.PutUint64(w.buf[offset:], v)
+}
 
 func (w *ESFWriter) WriteFloat32(v float32) {
 	w.buf = binary.LittleEndian.AppendUint32(w.buf, math.Float32bits(v))
