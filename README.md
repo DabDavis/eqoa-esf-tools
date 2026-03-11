@@ -91,6 +91,78 @@ playlist-dump CHAR.ESF 0x82A69570
 
 Shows playlist slot-to-animation mapping, speeds, play-once flags, and upper/lower body pairs.
 
+### `dumpanim` — Animation Format Inspector
+
+Reverse-engineer HSpriteAnim (0x2600) binary format. Dumps keyframe data, bone mappings, and playback parameters.
+
+```bash
+dumpanim CHAR.ESF
+```
+
+Shows per-animation header (format, numNodes, numFrames, fps, playSpeed, playbackType), per-node quantized quaternion keyframes, and RefMap bone-to-node mappings.
+
+### `dumpskeleton` — Bone Hierarchy Inspector
+
+Dump the full bone tree from CSprite character models.
+
+```bash
+dumpskeleton CHAR.ESF
+```
+
+Shows parent chains, local/accumulated positions, quaternion rotations, and scale for every bone. Useful for debugging skeletal animation and attachment points.
+
+### `dumpparticle` — Particle System Inspector
+
+Parse ParticleDefinition (0xC000) and ParticleDefData (0xC020) from spell effect files.
+
+```bash
+dumpparticle SPELLFX.ESF
+```
+
+Dumps per-motif scalar parameters (13 floats), color variables, gradient color tables (32 RGBA entries), and Vec3 fields.
+
+### `dumpvariants` / `variantdump` — Equipment Variant Inspector
+
+Analyze CSpriteVariant structures for armor/equipment mesh swapping.
+
+```bash
+dumpvariants CHAR.ESF
+variantdump CHAR.ESF
+```
+
+`dumpvariants` shows variant placement tags and texture DictIDs per armor set. `variantdump` dives deeper into variant header/footer binary structure and mesh counts.
+
+### `dumpatlas` — UI Atlas Extractor
+
+Extract and crop UI atlas textures from UI.ESF.
+
+```bash
+dumpatlas UI.ESF
+```
+
+Saves full atlas PNGs and crops specific UI regions (faces, window corners, bars).
+
+### `dumptslot` — Equipment Slot Mapper
+
+Map TSlotList entries to material indices and equipment slots on character models.
+
+```bash
+dumptslot CHAR.ESF 0xC698D870
+```
+
+Shows which materials correspond to which equipment slots (helm, chest, robe, etc.) with vertex/triangle counts per material.
+
+### `helmcheck` / `helmdiag` — Helm Texture Finder
+
+Search for helmet textures across multiple ESF/CSF files and export slot 7 materials.
+
+```bash
+helmcheck CHAR.ESF ITEM.CSF CHARCUST.CSF
+helmdiag CHAR.ESF
+```
+
+`helmcheck` cross-references helm DictIDs across files. `helmdiag` exports slot 7 base textures as PNG for visual inspection.
+
 ## Library (`pkg/esf`)
 
 The `pkg/esf` package can be imported by other Go programs:
@@ -155,10 +227,7 @@ Or build from source:
 ```bash
 git clone https://github.com/DabDavis/eqoa-esf-tools.git
 cd eqoa-esf-tools
-go build ./cmd/esfextract
-go build ./cmd/esfpatch
-go build ./cmd/esfimport
-go build ./cmd/esfrebuild
+go build ./cmd/...
 ```
 
 ## File Formats

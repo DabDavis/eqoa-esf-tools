@@ -4,6 +4,16 @@ esfpatch
 esfimport
 esfrebuild
 playlist-dump
+dumpanim
+dumpatlas
+dumpparticle
+dumpskeleton
+dumptslot
+dumpvariants
+variantdump
+helmcheck
+helmdiag
+*.exe
 
 # IDE
 .idea/
