@@ -1,18 +1,23 @@
-# Binaries
-esfextract
-esfpatch
-esfimport
-esfrebuild
-playlist-dump
-dumpanim
-dumpatlas
-dumpparticle
-dumpskeleton
-dumptslot
-dumpvariants
-variantdump
-helmcheck
-helmdiag
+# Binaries (root only)
+/esfextract
+/esfpatch
+/esfimport
+/esfrebuild
+/playlist-dump
+/dumpanim
+/dumpatlas
+/dumpparticle
+/dumpskeleton
+/dumptslot
+/dumpvariants
+/variantdump
+/helmcheck
+/helmdiag
+/extract-armor-tex
+/survey_mp
+/bgmextract
+/dataextract
+/imgextract
 *.exe
 
 # IDE

@@ -163,6 +163,46 @@ helmdiag CHAR.ESF
 
 `helmcheck` cross-references helm DictIDs across files. `helmdiag` exports slot 7 base textures as PNG for visual inspection.
 
+### `extract-armor-tex` — Armor Texture Extractor
+
+Extract armor set textures from CHARCUST.CSF and export as PNG.
+
+```bash
+extract-armor-tex CHARCUST.CSF
+```
+
+### `bgmextract` — PS2 Audio Extractor
+
+Decode PS2 SPU2-ADPCM background music files to WAV.
+
+```bash
+bgmextract music.bgm -o output/
+```
+
+### `dataextract` — Text/PAK Extractor
+
+Extract EQOA text data and PAK archives. Converts PS2 UTF-16LE strings to UTF-8.
+
+```bash
+dataextract DATA.PAK -o output/
+```
+
+### `imgextract` — PS2 Image Converter
+
+Convert PS2 raw framebuffer images (.16 ABGR1555, .RGB) to PNG.
+
+```bash
+imgextract image.16 -o output.png
+```
+
+### `survey_mp` — Material Survey
+
+Scan ESF/CSF files for MaterialPalette and Material object versions.
+
+```bash
+survey_mp TUNARIA.ESF CHAR.ESF
+```
+
 ## Library (`pkg/esf`)
 
 The `pkg/esf` package can be imported by other Go programs:
