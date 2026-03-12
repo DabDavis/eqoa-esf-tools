@@ -135,23 +135,22 @@ func (cb *CollBuffer) Load(file *ObjFile) error {
 			}
 
 		case 3:
-			// PS2: 3 × ReadInt16 + ReadByte(vgroup) + ReadByte(flora).
+			// PS2: 3 × ReadInt16 + ReadSChar(vgroup) + ReadSChar(flora).
+			// PS2 uses Read__9VIObjFileRSc (signed char) for both fields.
 			for j := int32(0); j < num; j++ {
 				x := file.readInt16()
 				y := file.readInt16()
 				z := file.readInt16()
-				vgroup := int(file.readByte())
-				flora := int(file.readByte())
+				vgroup := int(int8(file.readByte()))
+				flora := int(int8(file.readByte()))
 
 				vx := float32(x) * p
 				vy := float32(y) * p
 				vz := float32(z) * p
 
-				// Clamp vertex group to preTranslations length
-				if preTranslations != nil {
-					if vgroup >= len(preTranslations) {
-						vgroup = 0
-					}
+				// Apply preTranslation offset if available.
+				// Negative vgroup (-1) means "no group" — skip translation.
+				if preTranslations != nil && vgroup >= 0 && vgroup < len(preTranslations) {
 					vx += preTranslations[vgroup].X
 					vy += preTranslations[vgroup].Y
 					vz += preTranslations[vgroup].Z
