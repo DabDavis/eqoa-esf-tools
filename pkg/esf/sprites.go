@@ -145,7 +145,7 @@ func (g *GroupSprite) Load(file *ObjFile) error {
 	}
 
 	// PS2: ParseGroupSpriteMembers (0x0043B708) reads count + per-member:
-	// DictID(4) + Pos(12) + Rot(12) + Scale(4) = 32 bytes/entry.
+	// DictID(4) + Pos(12) + Scale(4) + Rot(12) = 32 bytes/entry.
 	membersInfo := g.info.Child(TypeGroupSpriteMembers)
 	if membersInfo == nil {
 		return nil
@@ -156,7 +156,7 @@ func (g *GroupSprite) Load(file *ObjFile) error {
 	for i := int32(0); i < nmemb; i++ {
 		membID := file.readInt32()
 		pos := file.readPoint()
-		scale := file.readFloat32() // PS2: float[3] = scale (always 1.0 in practice)
+		scale := file.readFloat32()
 		rot := file.readPoint()
 		g.Placements[i] = &SpritePlacement{SpriteID: membID, Pos: pos, Rot: rot, Scale: scale}
 	}
@@ -359,6 +359,23 @@ type NodeIDEntry struct {
 	BoneIndex int32 // bone index
 }
 
+// CSpritePartEmitter describes a particle emitter attached to a bone on a CSprite.
+// Parsed from 0x2960 (ParseCSpritePartEmitters). PS2 struct stride: 1056 bytes.
+// PS2 CreateParticleEmitters (0x00423A68) resolves PDDictID → ParticleDefinition
+// and creates a VIParticleEmitter at entity+bone position.
+// PS2 UpdateParticleEmitters (0x00423B28) reads bone matrix each frame via
+// BoneNodeIdx, sets emitter location/direction from the animated bone transform.
+type CSpritePartEmitter struct {
+	PDDictID    int32 // ParticleDefinition DictID to spawn
+	BoneNodeIdx int32 // skeleton bone index for position tracking (entry+0x3F8)
+	TrackBone   int32 // nonzero = follow bone position/rotation each frame (entry+0x3FC)
+	TimerMode   int32 // 0=always active, 1=timed (entry+0x3F0)
+	Flags       int32 // bit 0 = enable flag (entry+0x3F4)
+	Field5      int32 // entry+0x400
+	Field6      int32 // entry+0x404
+	TimerDur    int32 // timer duration when TimerMode==1 (entry+0x408)
+}
+
 // CSprite represents a character or NPC sprite, composed of sub-sprites.
 type CSprite struct {
 	GroupSprite
@@ -374,6 +391,8 @@ type CSprite struct {
 	NodeIDList   []NodeIDEntry   // named node → bone index (from 0x2915)
 	Animations   []*HSpriteAnim  // skeletal animations (from 0x2600 children)
 	BoneRefMap   *BoneRefMap     // refID hash → bone index mapping (from RefMap 0x5000)
+	PartEmitters []CSpritePartEmitter  // bone-attached particle emitters (from 0x2960)
+	PartDefs     []*ParticleDefinition // particle definitions embedded in CSprite (from 0x2950 children)
 }
 
 func (c *CSprite) Load(file *ObjFile) error {
@@ -559,6 +578,56 @@ func (c *CSprite) Load(file *ObjFile) error {
 				if rm != nil && int32(len(rm.Entries)) == numBones {
 					c.BoneRefMap = rm
 					break
+				}
+			}
+		}
+	}
+
+	// Parse PartDefinitions (0x2950) — container of ParticleDefinition (0xC000) children.
+	// PS2: ParseCSpritePartDefinitions (0x004381B8) iterates sub-objects calling
+	// ParseParticleDefinition for each. Only present on CSprite parent version >= 7.
+	pdContainer := c.info.Child(TypeCSpritePartDefs)
+	if pdContainer != nil {
+		for _, pdChild := range pdContainer.ChildrenOfType(TypeParticleDefinition) {
+			obj, err := file.GetObject(pdChild)
+			if err != nil || obj == nil {
+				continue
+			}
+			if pd, ok := obj.(*ParticleDefinition); ok {
+				c.PartDefs = append(c.PartDefs, pd)
+			}
+		}
+	}
+
+	// Parse PartEmitters (0x2960) — bone-attached particle emitter definitions.
+	// PS2: ParseCSpritePartEmitters (0x00438248). Per-entry format:
+	//   DictID(u32) + BoneNodeIdx(i32) + Flags(i32) + BoneNodeIdx2(i32) +
+	//   TrackBone(i32) + Field5(i32) + Field6(i32) + TimerDur(i32)
+	// Only present on CSprite parent version >= 7.
+	emContainer := c.info.Child(TypeCSpritePartEmitters)
+	if emContainer != nil && emContainer.Size >= 4 {
+		file.Seek(emContainer.Offset)
+		count := int(file.readInt32())
+		if count > 0 && count < 64 {
+			c.PartEmitters = make([]CSpritePartEmitter, count)
+			for i := 0; i < count; i++ {
+				pdDictID := file.readInt32()     // ParticleDefinition DictID
+				nodeID := file.readInt32()        // TimerMode (entry+0x3F0)
+				flags := file.readInt32()         // Flags (entry+0x3F4)
+				boneNodeIdx := file.readInt32()   // BoneNodeIdx (entry+0x3F8)
+				trackBone := file.readInt32()     // TrackBone (entry+0x3FC)
+				field5 := file.readInt32()        // entry+0x400
+				field6 := file.readInt32()        // entry+0x404
+				timerDur := file.readInt32()       // TimerDur (entry+0x408)
+				c.PartEmitters[i] = CSpritePartEmitter{
+					PDDictID:    pdDictID,
+					BoneNodeIdx: boneNodeIdx,
+					TrackBone:   trackBone,
+					TimerMode:   nodeID,
+					Flags:       flags,
+					Field5:      field5,
+					Field6:      field6,
+					TimerDur:    timerDur,
 				}
 			}
 		}

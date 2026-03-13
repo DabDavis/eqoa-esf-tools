@@ -17,7 +17,7 @@ type Vertex struct {
 	R, G, B, A     float32
 	VGroup         int16
 	BoneIdx        [4]byte // bone indices (from skinned pbtype=5)
-	BoneWeight     [4]byte // bone weights (from skinned pbtype=5), sum ≈ 255
+	BoneWeight     [4]byte // bone weights (from skinned pbtype=5), sum ≈ 127 (PS2 signed bytes)
 	Comment        string
 }
 

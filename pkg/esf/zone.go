@@ -116,6 +116,51 @@ func (z *ZoneActors) GetActors() []*ZoneActor {
 	return z.Actors
 }
 
+// RoomActorEntry pairs each actor with its room ID and index within that room.
+type RoomActorEntry struct {
+	Actor      *ZoneActor
+	RoomID     int32 // from ZoneRoomActors2 (0x3280)
+	ActorIndex int   // sequential index within the room's actor list
+}
+
+// GetActorsWithRoomIDs returns all actors annotated with their room ID and
+// per-room actor index. This is needed to match baked static lighting data.
+func (z *ZoneActors) GetActorsWithRoomIDs(file *ObjFile) ([]RoomActorEntry, error) {
+	var result []RoomActorEntry
+	for _, roomActors := range z.info.ChildrenOfType(TypeZoneRoomActors) {
+		// Read room ID from ZoneRoomActors2 (0x3280)
+		var roomID int32 = -1
+		if ra2 := roomActors.Child(TypeZoneRoomActors2); ra2 != nil {
+			data := file.RawBytes(int(ra2.Offset), int(ra2.Size))
+			if len(data) >= 4 {
+				roomID = int32(data[0]) | int32(data[1])<<8 | int32(data[2])<<16 | int32(data[3])<<24
+			}
+		}
+
+		ra3 := roomActors.Child(TypeZoneRoomActors3)
+		if ra3 == nil {
+			continue
+		}
+		actorIdx := 0
+		for _, actorInfo := range ra3.ChildrenOfType(TypeZoneActor) {
+			obj, err := file.GetObject(actorInfo)
+			if err != nil {
+				return nil, err
+			}
+			if obj == nil {
+				continue
+			}
+			result = append(result, RoomActorEntry{
+				Actor:      obj.(*ZoneActor),
+				RoomID:     roomID,
+				ActorIndex: actorIdx,
+			})
+			actorIdx++
+		}
+	}
+	return result, nil
+}
+
 // Zone represents a top-level zone node in the ESF object tree.
 type Zone struct {
 	info *ObjInfo
@@ -182,7 +227,17 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 		}
 	}
 
-	// All other types via ZoneActors.
+	// Load baked static lighting and build lookup map.
+	bakedMap := map[int64][]Color32{} // key = roomID<<32 | actorIndex
+	lighting, _ := z.GetStaticLighting(file)
+	for _, rsl := range lighting {
+		for _, entry := range rsl.Entries {
+			key := int64(rsl.RoomIndex)<<32 | int64(entry.ActorIndex)
+			bakedMap[key] = entry.Colors
+		}
+	}
+
+	// All other types via ZoneActors with room IDs (for baked lighting matching).
 	actors, err := z.GetZoneActors(file)
 	if err != nil {
 		return nil, fmt.Errorf("loading zone actors: %w", err)
@@ -191,7 +246,16 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 		return ret, nil
 	}
 
-	for _, actor := range actors.GetActors() {
+	actorsWithRooms, err := actors.GetActorsWithRoomIDs(file)
+	if err != nil {
+		return nil, fmt.Errorf("loading actors with room IDs: %w", err)
+	}
+
+	for _, rae := range actorsWithRooms {
+		actor := rae.Actor
+		bakedKey := int64(rae.RoomID)<<32 | int64(rae.ActorIndex)
+		actorColors := bakedMap[bakedKey]
+
 		obj, err := file.FindObject(actor.Placement.SpriteID)
 		if err != nil {
 			continue
@@ -209,23 +273,27 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 			if loadErr != nil {
 				continue
 			}
+			colorOff := 0
 			for _, sp := range sprites {
 				combined := sp.CombineWith(actor.Placement)
 				inner, resolveErr := sp.GetSprite(file)
 				if resolveErr != nil || inner == nil {
 					continue
 				}
-				ret = append(ret, &SpritePlacement{
+				p := &SpritePlacement{
 					Sprite:  inner,
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
 					Color:   combined.Color,
 					IsFlora: sp.IsFlora,
-				})
+				}
+				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				ret = append(ret, p)
 			}
 		case *CSprite:
 			// CSprite is a GroupSprite variant: absolute rotation.
+			colorOff := 0
 			for _, sp := range s.GetSprites() {
 				combined := sp.CombineWith(actor.Placement)
 				combined.Rot = sp.Rot
@@ -233,17 +301,20 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 				if resolveErr != nil || inner == nil {
 					continue
 				}
-				ret = append(ret, &SpritePlacement{
+				p := &SpritePlacement{
 					Sprite:  inner,
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
 					Color:   combined.Color,
 					IsFlora: sp.IsFlora,
-				})
+				}
+				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				ret = append(ret, p)
 			}
 		case *GroupSprite:
 			// GroupSprite children use their own rotation combined with actor rotation.
+			colorOff := 0
 			for _, sp := range s.GetSprites() {
 				combined := sp.CombineWith(actor.Placement)
 				combined.Rot = sp.Rot.Add(actor.Placement.Rot)
@@ -251,14 +322,16 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 				if resolveErr != nil || inner == nil {
 					continue
 				}
-				ret = append(ret, &SpritePlacement{
+				p := &SpritePlacement{
 					Sprite:  inner,
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
 					Color:   combined.Color,
 					IsFlora: sp.IsFlora,
-				})
+				}
+				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				ret = append(ret, p)
 			}
 		case *LODSprite:
 			inner, isFlora, resolveErr := s.GetSprite(file)
@@ -266,28 +339,31 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 				continue
 			}
 			ret = append(ret, &SpritePlacement{
-				Sprite:  inner,
-				Pos:     actor.Placement.Pos,
-				Rot:     actor.Placement.Rot,
-				Scale:   actor.Placement.Scale,
-				Color:   actor.Placement.Color,
-				IsFlora: isFlora,
+				Sprite:      inner,
+				Pos:         actor.Placement.Pos,
+				Rot:         actor.Placement.Rot,
+				Scale:       actor.Placement.Scale,
+				Color:       actor.Placement.Color,
+				IsFlora:     isFlora,
+				BakedColors: actorColors,
 			})
 		case *SkinSubSprite:
 			ret = append(ret, &SpritePlacement{
-				Sprite: &s.SimpleSprite,
-				Pos:    actor.Placement.Pos,
-				Rot:    actor.Placement.Rot,
-				Scale:  actor.Placement.Scale,
-				Color:  actor.Placement.Color,
+				Sprite:      &s.SimpleSprite,
+				Pos:         actor.Placement.Pos,
+				Rot:         actor.Placement.Rot,
+				Scale:       actor.Placement.Scale,
+				Color:       actor.Placement.Color,
+				BakedColors: actorColors,
 			})
 		case *SimpleSubSprite:
 			ret = append(ret, &SpritePlacement{
-				Sprite: &s.SimpleSprite,
-				Pos:    actor.Placement.Pos,
-				Rot:    actor.Placement.Rot,
-				Scale:  actor.Placement.Scale,
-				Color:  actor.Placement.Color,
+				Sprite:      &s.SimpleSprite,
+				Pos:         actor.Placement.Pos,
+				Rot:         actor.Placement.Rot,
+				Scale:       actor.Placement.Scale,
+				Color:       actor.Placement.Color,
+				BakedColors: actorColors,
 			})
 		case *ParticleSprite:
 			// ParticleSprites are zone-placed particle effects.
@@ -295,20 +371,22 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 			continue
 		case *FloraSprite:
 			ret = append(ret, &SpritePlacement{
-				Sprite:  &s.SimpleSprite,
-				Pos:     actor.Placement.Pos,
-				Rot:     actor.Placement.Rot,
-				Scale:   actor.Placement.Scale,
-				Color:   actor.Placement.Color,
-				IsFlora: true,
+				Sprite:      &s.SimpleSprite,
+				Pos:         actor.Placement.Pos,
+				Rot:         actor.Placement.Rot,
+				Scale:       actor.Placement.Scale,
+				Color:       actor.Placement.Color,
+				IsFlora:     true,
+				BakedColors: actorColors,
 			})
 		case *SimpleSprite:
 			ret = append(ret, &SpritePlacement{
-				Sprite: s,
-				Pos:    actor.Placement.Pos,
-				Rot:    actor.Placement.Rot,
-				Scale:  actor.Placement.Scale,
-				Color:  actor.Placement.Color,
+				Sprite:      s,
+				Pos:         actor.Placement.Pos,
+				Rot:         actor.Placement.Rot,
+				Scale:       actor.Placement.Scale,
+				Color:       actor.Placement.Color,
+				BakedColors: actorColors,
 			})
 		}
 	}
@@ -317,6 +395,28 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 }
 
 // EffectVolumePlacement describes a placed effect volume in a zone.
+// splitBakedColors assigns a slice of actorColors to sp based on the vertex
+// count of the sprite's PrimBuffer. Returns the updated color offset.
+func splitBakedColors(sp *SpritePlacement, sprite *SimpleSprite, file *ObjFile, actorColors []Color32, offset int) int {
+	if len(actorColors) == 0 {
+		return offset
+	}
+	pb, err := sprite.GetPrimBuffer(file)
+	if err != nil || pb == nil {
+		return offset
+	}
+	verts := 0
+	for _, vl := range pb.VertexLists {
+		verts += len(vl.Vertices)
+	}
+	end := offset + verts
+	if end > len(actorColors) {
+		return offset
+	}
+	sp.BakedColors = actorColors[offset:end]
+	return end
+}
+
 type EffectVolumePlacement struct {
 	Pos            Point
 	BBox           Box              // world-space bounding box (local translated by actor pos)
@@ -733,4 +833,136 @@ func (w *WorldZoneProxies) GetZoneProxy(offset int64) *ZoneProxy {
 		}
 	}
 	return nil
+}
+
+// --- ZoneStaticTable (0x32C0) — per-room streaming index ---
+//
+// PS2: ParseZoneStaticTable at 0x004395B0. Child of ZoneBase.
+// Maps each room index to file offsets/sizes for its ZoneRoomActors and
+// ZoneRoomStaticLightings data. Used for lazy streaming on PS2.
+
+// ZoneStaticTableEntry maps a room to its actor and lighting data offsets.
+type ZoneStaticTableEntry struct {
+	ActorsOffset   int64  // ESF byte offset to ZoneRoomActors, -1 if none
+	ActorsSize     uint32 // byte size of the ZoneRoomActors block
+	LightingOffset int64  // ESF byte offset to ZoneRoomStaticLightings, -1 if none
+	LightingSize   uint32 // byte size of the ZoneRoomStaticLightings block
+}
+
+// ZoneStaticTable holds the per-room streaming index.
+type ZoneStaticTable struct {
+	info    *ObjInfo
+	Entries []ZoneStaticTableEntry
+}
+
+func (z *ZoneStaticTable) ObjInfo() *ObjInfo { return z.info }
+
+func (z *ZoneStaticTable) Load(file *ObjFile) error {
+	file.Seek(z.info.Offset)
+	count := file.readInt32()
+	if count <= 0 || count > 4096 {
+		return nil
+	}
+	z.Entries = make([]ZoneStaticTableEntry, count)
+	for i := int32(0); i < count; i++ {
+		z.Entries[i] = ZoneStaticTableEntry{
+			ActorsOffset:   file.readInt64(),
+			ActorsSize:     file.readUint32(),
+			LightingOffset: file.readInt64(),
+			LightingSize:   file.readUint32(),
+		}
+	}
+	return nil
+}
+
+// --- Static Lighting (per-room baked vertex colors) ---
+//
+// Hierarchy: ZoneStaticLightnings(0x32B0) → ZoneRoomStaticLightings(0x3290)
+//   → ZoneRoomStaticLightings2(0x32A0) [room index]
+//   → ZoneRoomStaticLightings3(0x6030) → StaticLighting(0x6010)
+//     → StaticLightingObj(0x6020) [header: primBufIndex + flags]
+//     → ColorBuffer(0x1220) [per-vertex RGBA]
+
+// StaticLightingEntry holds baked per-vertex colors for one actor in a room.
+type StaticLightingEntry struct {
+	ActorIndex int32     // index into the room's actor list (from StaticLightingObj)
+	Flags      int32     // typically 1
+	Colors     []Color32 // per-vertex RGBA baked lighting
+	DictID     int32     // ColorBuffer DictID
+}
+
+// RoomStaticLighting holds all baked lighting for a room.
+type RoomStaticLighting struct {
+	RoomIndex int32
+	Entries   []StaticLightingEntry
+}
+
+// GetStaticLighting extracts all per-room baked vertex color data from the zone.
+func (z *Zone) GetStaticLighting(file *ObjFile) ([]RoomStaticLighting, error) {
+	staticLtn := z.info.Child(TypeZoneStaticLightnings)
+	if staticLtn == nil || len(staticLtn.Children) == 0 {
+		return nil, nil
+	}
+
+	var result []RoomStaticLighting
+
+	// Each child of ZoneStaticLightnings is a ZoneRoomStaticLightings (0x3290)
+	// Note: type 0x3290 is labeled TypeZoneActors in types.go but here it's
+	// used as ZoneRoomStaticLightings when parented under 0x32B0.
+	for _, roomLtn := range staticLtn.Children {
+		if roomLtn.Type != TypeZoneActors { // 0x3290
+			continue
+		}
+
+		rsl := RoomStaticLighting{RoomIndex: -1}
+
+		// Get room index from ZoneRoomStaticLightings2 (0x32A0)
+		if ri := roomLtn.Child(TypeZoneRoomStaticLightings2); ri != nil {
+			data := file.RawBytes(int(ri.Offset), int(ri.Size))
+			if len(data) >= 4 {
+				rsl.RoomIndex = int32(data[0]) | int32(data[1])<<8 | int32(data[2])<<16 | int32(data[3])<<24
+			}
+		}
+
+		// Walk ZoneRoomStaticLightings3 → StaticLighting → StaticLightingObj + ColorBuffer
+		roomLtn3 := roomLtn.Child(TypeZoneRoomStaticLightings3)
+		if roomLtn3 == nil {
+			continue
+		}
+
+		for _, slInfo := range roomLtn3.ChildrenOfType(TypeStaticLighting) {
+			entry := StaticLightingEntry{ActorIndex: -1}
+
+			// StaticLightingObj header (8 bytes: primBufIndex + flags)
+			if slObj := slInfo.Child(TypeStaticLightingObj); slObj != nil {
+				data := file.RawBytes(int(slObj.Offset), int(slObj.Size))
+				if len(data) >= 8 {
+					entry.ActorIndex = int32(data[0]) | int32(data[1])<<8 | int32(data[2])<<16 | int32(data[3])<<24
+					entry.Flags = int32(data[4]) | int32(data[5])<<8 | int32(data[6])<<16 | int32(data[7])<<24
+				}
+			}
+
+			// ColorBuffer — take the first one (multiple are variants)
+			for _, cbInfo := range slInfo.ChildrenOfType(TypeColorBuffer) {
+				obj, err := file.GetObject(cbInfo)
+				if err != nil || obj == nil {
+					continue
+				}
+				cb := obj.(*ColorBuffer)
+				entry.Colors = cb.Colors
+				entry.DictID = cb.DictID
+				break // use first ColorBuffer
+			}
+
+			if len(entry.Colors) > 0 {
+				rsl.Entries = append(rsl.Entries, entry)
+			}
+		}
+
+		if len(rsl.Entries) > 0 {
+			result = append(result, rsl)
+		}
+	}
+
+	return result, nil
 }

@@ -406,6 +406,8 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 		return &WorldBaseHeader{info: info}
 	case TypeWorldZoneProxies:
 		return &WorldZoneProxies{info: info}
+	case TypeZoneStaticTable:
+		return &ZoneStaticTable{info: info}
 	case TypeHSpriteHierarchy:
 		return &HSpriteHierarchy{info: info}
 	case TypeHSpriteAnim:

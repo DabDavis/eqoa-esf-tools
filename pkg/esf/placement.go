@@ -32,8 +32,9 @@ type SpritePlacement struct {
 	Rot      Point
 	Scale    float32
 	Color    [4]byte
-	Variant  *VariantTag // nil = base mesh (always drawn)
-	IsFlora  bool        // true for FloraSprite actors (rendered separately with alpha blending)
+	Variant     *VariantTag // nil = base mesh (always drawn)
+	IsFlora     bool        // true for FloraSprite actors (rendered separately with alpha blending)
+	BakedColors []Color32   // per-vertex baked lighting (nil if none)
 }
 
 // GetSprite resolves the sprite, either from the direct reference or by

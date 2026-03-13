@@ -97,6 +97,8 @@ const (
 	TypeEffectVolumeSpriteHeader  uint16 = 0xc310
 	TypeEffectVolumeParticle      uint16 = 0xc320
 	TypeEffectVolumeParams        uint16 = 0xc330
+	TypeCSpritePartDefs           uint16 = 0x2950
+	TypeCSpritePartEmitters       uint16 = 0x2960
 )
 
 type objTypeDef struct {
