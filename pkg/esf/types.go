@@ -83,8 +83,10 @@ const (
 	TypeResourceDir               uint16 = 0xa000
 	TypeResourceDir2              uint16 = 0xa010
 	TypeAdpcm                     uint16 = 0xb000
+	TypeAdpcmHeader               uint16 = 0xb010
 	TypeXm                        uint16 = 0xb030
 	TypeSoundSprite               uint16 = 0xb100
+	TypeSoundSpriteHeader         uint16 = 0xb101
 	TypeParticleDefinition        uint16 = 0xc000
 	TypeParticleDefHeader         uint16 = 0xc010
 	TypeParticleDefData           uint16 = 0xc020
@@ -191,8 +193,10 @@ var objTypeRegistry = map[uint16]objTypeDef{
 	TypeResourceDir:              {"ResourceDir", false, false},
 	TypeResourceDir2:             {"ResourceDir2", false, false},
 	TypeAdpcm:                    {"Adpcm", false, false},
+	TypeAdpcmHeader:              {"AdpcmHeader", false, false},
 	TypeXm:                       {"Xm", false, false},
 	TypeSoundSprite:              {"SoundSprite", false, false},
+	TypeSoundSpriteHeader:        {"SoundSpriteHeader", true, true},
 	TypeParticleDefinition:       {"ParticleDefinition", false, false},
 	TypeParticleDefHeader:        {"ParticleDefHeader", true, true},
 	TypeParticleDefData:          {"ParticleDefData", false, false},
