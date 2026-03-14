@@ -84,6 +84,7 @@ const (
 	TypeResourceDir2              uint16 = 0xa010
 	TypeAdpcm                     uint16 = 0xb000
 	TypeAdpcmHeader               uint16 = 0xb010
+	TypeAdpcmData                 uint16 = 0xb020
 	TypeXm                        uint16 = 0xb030
 	TypeSoundSprite               uint16 = 0xb100
 	TypeSoundSpriteHeader         uint16 = 0xb101
@@ -194,6 +195,7 @@ var objTypeRegistry = map[uint16]objTypeDef{
 	TypeResourceDir2:             {"ResourceDir2", false, false},
 	TypeAdpcm:                    {"Adpcm", false, false},
 	TypeAdpcmHeader:              {"AdpcmHeader", false, false},
+	TypeAdpcmData:               {"AdpcmData", false, false},
 	TypeXm:                       {"Xm", false, false},
 	TypeSoundSprite:              {"SoundSprite", false, false},
 	TypeSoundSpriteHeader:        {"SoundSpriteHeader", true, true},
