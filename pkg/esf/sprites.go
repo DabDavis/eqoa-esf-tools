@@ -330,11 +330,27 @@ func (h *HSprite) LoadSprites(file *ObjFile) ([]*SpritePlacement, error) {
 // PlayListEntry maps a VICSpriteAnimID (playlist index) to animation DictIDs.
 // Parsed from CSpritePlayList (0x2910). The PS2 uses these indices for
 // SetAnimation/SetAttackAction; the DictIDs resolve to HSpriteAnim entries.
+//
+// PS2 struct (52 bytes per slot, base at VICSprite+0x1A8):
+//
+//	+0x1A8  VIHSpriteAnim*  anim1        (resolved from AnimDictID[0])
+//	+0x1AC  VIHSpriteAnim*  anim2        (resolved from AnimDictID[1])
+//	+0x1B0  float           speed
+//	+0x1B4  int             playOnce
+//	+0x1C0  VIWave*         sound1       (resolved from SoundDictID[0], v>=2)
+//	+0x1C4  VIWave*         sound2       (resolved from SoundDictID[1], v>=2)
+//	+0x1C8  float           soundVol1    (v>=2)
+//	+0x1CC  float           soundVol2    (v>=2)
+//	+0x1D0  float           pitchRange1  (v>=3)
+//	+0x1D4  float           pitchRange2  (v>=3)
 type PlayListEntry struct {
-	Index      int32   // VICSpriteAnimID — the playlist slot
-	AnimDictID [2]int32 // [0]=upper/primary, [1]=lower/secondary animation DictIDs
-	Speed      float32 // playback speed multiplier
-	PlayOnce   int32   // 0=loop, 1=play-once
+	Index        int32      // VICSpriteAnimID — the playlist slot
+	AnimDictID   [2]int32   // [0]=upper/primary, [1]=lower/secondary animation DictIDs
+	Speed        float32    // playback speed multiplier
+	PlayOnce     int32      // 0=loop, 1=play-once
+	SoundDictID  [2]int32   // [0]=Primary Sound, [1]=Secondary Sound (from 0xB070, v>=2)
+	SoundVolume  [2]float32 // per-sound volume multiplier (default 1.0, v>=2)
+	PitchRange   [2]float32 // random pitch variation range (default 0.0, v>=3)
 }
 
 // TSlotEntry maps a material index to a texture slot ID within a CSprite.
@@ -382,6 +398,15 @@ type CSpritePartEmitter struct {
 }
 
 // CSprite represents a character or NPC sprite, composed of sub-sprites.
+// SoundClip holds a decoded ADPCM sound from CSprite's 0xB070 container.
+type SoundClip struct {
+	DictID     int32
+	SampleRate int32
+	Volume     float32
+	Loop       bool
+	RawVAG     []byte // raw VAG ADPCM data (decoded by audio system)
+}
+
 type CSprite struct {
 	GroupSprite
 	DictID       int32
@@ -398,6 +423,9 @@ type CSprite struct {
 	BoneRefMap   *BoneRefMap     // refID hash → bone index mapping (from RefMap 0x5000)
 	PartEmitters []CSpritePartEmitter  // bone-attached particle emitters (from 0x2960)
 	PartDefs     []*ParticleDefinition // particle definitions embedded in CSprite (from 0x2950 children)
+	SoundClips   []SoundClip           // animation-triggered sounds (from 0xB070 container)
+	ContSoundID  int32                 // continuous/ambient sound DictID (from 0x2940, 0=none)
+	ContSoundVol float32               // continuous sound volume (from 0x2940, default 1.0)
 }
 
 func (c *CSprite) Load(file *ObjFile) error {
@@ -541,15 +569,21 @@ func (c *CSprite) Load(file *ObjFile) error {
 				e.Index = file.readInt32()    // playlist slot (VICSpriteAnimID)
 				e.Speed = file.readFloat32()  // playback speed
 				e.PlayOnce = file.readInt32() // 0=loop, 1=play-once
-				// Version >= 2: group animation fields (not needed for Go client)
+				e.SoundVolume[0] = 1.0        // PS2 default
+				e.SoundVolume[1] = 1.0
+				// Version >= 2: per-slot sound fields (PS2: ParseCSpritePlayList 0x00437B80).
+				// Primary + Secondary sound DictIDs (from 0xB070 container), volumes,
+				// and pitch variation ranges. PS2 resolves DictIDs to VIWave* via FindTyped.
 				if plInfo.Version >= 2 {
-					file.skipBytes(8) // groupAnimDictID1 + speed1
+					e.SoundDictID[0] = file.readInt32()   // Primary Sound DictID
+					e.SoundVolume[0] = file.readFloat32() // Primary Sound volume
 					if plInfo.Version >= 3 {
-						file.skipBytes(4) // groupFloat1
+						e.PitchRange[0] = file.readFloat32() // Primary pitch range
 					}
-					file.skipBytes(8) // groupAnimDictID2 + speed2
+					e.SoundDictID[1] = file.readInt32()   // Secondary Sound DictID
+					e.SoundVolume[1] = file.readFloat32() // Secondary Sound volume
 					if plInfo.Version >= 3 {
-						file.skipBytes(4) // groupFloat2
+						e.PitchRange[1] = file.readFloat32() // Secondary pitch range
 					}
 				}
 				c.PlayList[i] = e
@@ -636,6 +670,50 @@ func (c *CSprite) Load(file *ObjFile) error {
 				}
 			}
 		}
+	}
+
+	// Parse SoundContainer (0xB070) — holds ADPCM sound clips for animation triggers.
+	// PS2: ParseCSpriteContSound (0x00438100). Each child is Adpcm (0xB000) with
+	// AdpcmHeader (0xB010, 28 bytes) + AdpcmData (0xB020, raw VAG blocks).
+	soundContainer := c.info.Child(0xB070)
+	if soundContainer != nil {
+		for _, adpcmInfo := range soundContainer.ChildrenOfType(TypeAdpcm) {
+			clip := SoundClip{SampleRate: 11025, Volume: 1.0}
+			// Parse header (0xB010)
+			for _, ch := range adpcmInfo.Children {
+				if ch.Type == 0xB010 && ch.Size >= 16 {
+					file.Seek(ch.Offset)
+					clip.DictID = file.readInt32()
+					file.readInt32() // channels
+					file.readInt32() // numBlocks
+					clip.SampleRate = file.readInt32()
+					if ch.Size >= 28 {
+						clip.Volume = file.readFloat32()
+						file.readFloat32() // volume2
+						clip.Loop = file.readInt32() != 0
+					}
+				}
+			}
+			// Parse raw VAG data (0xB020)
+			for _, ch := range adpcmInfo.Children {
+				if ch.Type == 0xB020 && ch.Size > 0 {
+					clip.RawVAG = file.RawBytes(ch.Offset, int(ch.Size))
+				}
+			}
+			if clip.DictID != 0 && len(clip.RawVAG) > 0 {
+				c.SoundClips = append(c.SoundClips, clip)
+			}
+		}
+	}
+
+	// Parse SoundConfig (0x2940) — continuous/ambient sound configuration.
+	// PS2: ParseCSpriteContSound reads DictID + volume float.
+	c.ContSoundVol = 1.0
+	soundCfg := c.info.Child(0x2940)
+	if soundCfg != nil && soundCfg.Size >= 8 {
+		file.Seek(soundCfg.Offset)
+		c.ContSoundID = file.readInt32()
+		c.ContSoundVol = file.readFloat32()
 	}
 
 	return nil

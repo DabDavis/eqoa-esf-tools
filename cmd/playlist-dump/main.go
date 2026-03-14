@@ -45,8 +45,36 @@ func main() {
 	fmt.Printf("  Race=%d Sex=%d SkelType=%d Scale=%.2f\n", cs.Race, cs.Sex, cs.SkelType, cs.DefaultScale)
 	fmt.Printf("\n  PlayList: %d entries\n", len(cs.PlayList))
 	for _, e := range cs.PlayList {
-		fmt.Printf("    slot %2d: anim[0]=0x%08X  anim[1]=0x%08X  speed=%.2f  playOnce=%d\n",
-			e.Index, uint32(e.AnimDictID[0]), uint32(e.AnimDictID[1]), e.Speed, e.PlayOnce)
+		snd := ""
+		if e.SoundDictID[0] != 0 || e.SoundDictID[1] != 0 {
+			snd = fmt.Sprintf("  snd1=0x%08X(v%.2f,p%.2f) snd2=0x%08X(v%.2f,p%.2f)",
+				uint32(e.SoundDictID[0]), e.SoundVolume[0], e.PitchRange[0],
+				uint32(e.SoundDictID[1]), e.SoundVolume[1], e.PitchRange[1])
+		}
+		fmt.Printf("    slot %2d: anim[0]=0x%08X  anim[1]=0x%08X  speed=%.2f  playOnce=%d%s\n",
+			e.Index, uint32(e.AnimDictID[0]), uint32(e.AnimDictID[1]), e.Speed, e.PlayOnce, snd)
+	}
+
+	// Sound clips
+	fmt.Printf("\n  SoundClips: %d\n", len(cs.SoundClips))
+	for i, clip := range cs.SoundClips {
+		fmt.Printf("    [%d] DictID=0x%08X rate=%d vol=%.2f loop=%v size=%d\n",
+			i, uint32(clip.DictID), clip.SampleRate, clip.Volume, clip.Loop, len(clip.RawVAG))
+	}
+	if cs.ContSoundID != 0 {
+		fmt.Printf("  ContSound: DictID=0x%08X vol=%.2f\n", uint32(cs.ContSoundID), cs.ContSoundVol)
+	}
+
+	// Keyframes in animations
+	fmt.Printf("\n  Animation Keyframes:\n")
+	for i, a := range cs.Animations {
+		if len(a.Keyframes) > 0 {
+			fmt.Printf("    anim[%d] DictID=0x%08X: %d keyframes, %d frames, %.1f fps\n",
+				i, uint32(a.DictID), len(a.Keyframes), a.NumFrames, a.FPS)
+			for j, kf := range a.Keyframes {
+				fmt.Printf("      kf[%d] refID=0x%08X time=%.4fs\n", j, uint32(kf.RefID), kf.Time)
+			}
+		}
 	}
 	fmt.Printf("\n  Animations: %d\n", len(cs.Animations))
 	for i, a := range cs.Animations {
