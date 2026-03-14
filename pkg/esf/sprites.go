@@ -171,11 +171,16 @@ func (g *GroupSprite) GetSprites() []*SpritePlacement { return g.Placements }
 // BoneNode represents a single bone in a skeletal hierarchy.
 // Position is the absolute bind-pose position in model space.
 type BoneNode struct {
-	ParentID int32      // -1 = root
-	Pos      Point      // bind-pose position (model space)
-	Quat     [4]float32 // bind-pose quaternion (x,y,z,w)
-	Scale    float32
-	FixScale [3]float32 // per-axis scale (hierarchy ver >= 2); default (1,1,1)
+	ParentID   int32      // -1 = root
+	Pos        Point      // bind-pose position (model space)
+	Quat       [4]float32 // bind-pose quaternion (x,y,z,w)
+	Scale      float32
+	FixScale   [3]float32 // per-axis scale (hierarchy ver >= 2); default (1,1,1)
+	LODChannel int32      // PS2 per-bone animation LOD channel (0-3, hierarchy ver >= 1)
+	// 3 = root/spine/major joints (always animated)
+	// 2 = arms/legs/secondary joints (medium distance)
+	// 1 = hands/extremities (close only)
+	// 0 = fingertips/mount points (never animated)
 }
 
 // HSpriteHierarchy describes the bone hierarchy for an HSprite.
@@ -205,7 +210,7 @@ func (h *HSpriteHierarchy) Load(file *ObjFile) error {
 		h.Nodes[i].Pos.Y = file.readFloat32()
 		h.Nodes[i].Pos.Z = file.readFloat32()
 		if ver != 0 {
-			file.skipBytes(4) // k
+			h.Nodes[i].LODChannel = file.readInt32() // PS2 per-bone animation LOD channel (0-3)
 		}
 		if ver >= 2 {
 			h.Nodes[i].FixScale[0] = file.readFloat32()
