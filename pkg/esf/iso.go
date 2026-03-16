@@ -227,6 +227,8 @@ func OpenISOFile(isoPath, fileName string) (*ObjFile, error) {
 			fileHandle: fd,
 			fileBase:   offset,
 			fileSize:   int64(n),
+			winStart:   0,
+			winEnd:     n, // full data loaded — ensureData won't reload
 		}
 		if err := f.readFileHeader(); err != nil {
 			fd.Close()

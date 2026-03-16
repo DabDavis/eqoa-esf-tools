@@ -160,6 +160,7 @@ func OpenISO(isoPath string) (*ObjFile, error) {
 		objCache:   make(map[int]Object),
 		ISOBase:    int64(tunariaByteOffset),
 		fileHandle: fd,
+		winEnd:     n, // full data loaded — ensureData won't reload during parsing
 		fileBase:   int64(tunariaByteOffset),
 		fileSize:   int64(n),
 	}
