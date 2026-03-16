@@ -2,6 +2,7 @@ package esf
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -177,23 +178,75 @@ func OpenISOFile(isoPath, fileName string) (*ObjFile, error) {
 		return nil, fmt.Errorf("unknown ISO file %q", fileName)
 	}
 
-	data, err := readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
-	}
-
+	// CSF files must be decompressed — can't stream.
 	if entry.IsCSF {
+		data, err := readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
+		}
 		data, err = DecompressCSFBytes(data)
 		if err != nil {
 			return nil, fmt.Errorf("decompressing %s: %w", fileName, err)
 		}
+		f, err := OpenBytes(data)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", fileName, err)
+		}
+		f.ISOBase = entry.Sector * sectorSize
+		return f, nil
 	}
 
+	// Large uncompressed ESF files (>10MB): use streaming mode.
+	// Parse index from full read, then switch to on-demand 256KB windows.
+	offset := entry.Sector * sectorSize
+	if entry.Size > 10*1024*1024 {
+		fd, err := os.Open(isoPath)
+		if err != nil {
+			return nil, err
+		}
+		data := make([]byte, entry.Size)
+		n, err := fd.ReadAt(data, offset)
+		if err != nil && n < 32 {
+			fd.Close()
+			return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
+		}
+		data = data[:n]
+
+		f := &ObjFile{
+			data:       data,
+			objCache:   make(map[int]Object),
+			ISOBase:    offset,
+			fileHandle: fd,
+			fileBase:   offset,
+			fileSize:   int64(n),
+		}
+		if err := f.readFileHeader(); err != nil {
+			fd.Close()
+			return nil, fmt.Errorf("parsing %s: %w", fileName, err)
+		}
+		// Parse index then release bulk data.
+		if _, err := f.Root(); err != nil {
+			fd.Close()
+			return nil, fmt.Errorf("parsing %s index: %w", fileName, err)
+		}
+		log.Printf("esf: %s index parsed (%d objects). Streaming mode — releasing %d MB",
+			fileName, len(f.objects), len(f.data)/(1024*1024))
+		f.data = nil
+		f.winStart = 0
+		f.winEnd = 0
+		return f, nil
+	}
+
+	// Small ESF files: load fully into memory.
+	data, err := readISORange(isoPath, offset, entry.Size)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
+	}
 	f, err := OpenBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", fileName, err)
 	}
-	f.ISOBase = entry.Sector * sectorSize
+	f.ISOBase = offset
 	return f, nil
 }
 
