@@ -203,6 +203,25 @@ func ISOHasFile(fileName string) bool {
 	return ok
 }
 
+// ISOFileLocation describes a file's position within the ISO.
+type ISOFileLocation struct {
+	Offset int64
+	Size   int64
+}
+
+// ISOGetFileLocation returns the byte offset and size of a named file in the ISO.
+// Returns (location, true) if found, (zero, false) if not.
+func ISOGetFileLocation(fileName string) (ISOFileLocation, bool) {
+	entry, ok := isoFileTable[fileName]
+	if !ok {
+		return ISOFileLocation{}, false
+	}
+	return ISOFileLocation{
+		Offset: entry.Sector * sectorSize,
+		Size:   entry.Size,
+	}, true
+}
+
 // ReadISOFileRaw reads raw bytes of a named file from the ISO without parsing.
 // Use this for non-ESF files (e.g. BGM audio). Returns nil, error if not found.
 func ReadISOFileRaw(isoPath, fileName string) ([]byte, error) {
