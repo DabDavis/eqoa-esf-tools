@@ -177,57 +177,23 @@ func OpenISOFile(isoPath, fileName string) (*ObjFile, error) {
 		return nil, fmt.Errorf("unknown ISO file %q", fileName)
 	}
 
-	// CSF files must be decompressed into heap — can't mmap.
+	data, err := readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
+	}
+
 	if entry.IsCSF {
-		data, err := readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
-		if err != nil {
-			return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
-		}
 		data, err = DecompressCSFBytes(data)
 		if err != nil {
 			return nil, fmt.Errorf("decompressing %s: %w", fileName, err)
 		}
-		f, err := OpenBytes(data)
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", fileName, err)
-		}
-		f.ISOBase = entry.Sector * sectorSize
-		return f, nil
 	}
 
-	// Uncompressed ESF: mmap to avoid heap allocation.
-	offset := entry.Sector * sectorSize
-	fd, err := os.Open(isoPath)
+	f, err := OpenBytes(data)
 	if err != nil {
-		return nil, err
-	}
-
-	data, err := mmapFile(fd, offset, entry.Size)
-	if err != nil {
-		// Fallback to heap read.
-		fd.Close()
-		data, err = readISORange(isoPath, offset, entry.Size)
-		if err != nil {
-			return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
-		}
-		f, err := OpenBytes(data)
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", fileName, err)
-		}
-		f.ISOBase = offset
-		return f, nil
-	}
-
-	f := &ObjFile{
-		data:     data,
-		objCache: make(map[int]Object),
-		ISOBase:  offset,
-		mmapFile: fd,
-	}
-	if err := f.readFileHeader(); err != nil {
-		f.Close()
 		return nil, fmt.Errorf("parsing %s: %w", fileName, err)
 	}
+	f.ISOBase = entry.Sector * sectorSize
 	return f, nil
 }
 
@@ -238,28 +204,13 @@ func ISOHasFile(fileName string) bool {
 }
 
 // ReadISOFileRaw reads raw bytes of a named file from the ISO without parsing.
-// Uses mmap when possible to avoid heap allocation. Returns nil, error if not found.
+// Use this for non-ESF files (e.g. BGM audio). Returns nil, error if not found.
 func ReadISOFileRaw(isoPath, fileName string) ([]byte, error) {
 	entry, ok := isoFileTable[fileName]
 	if !ok {
 		return nil, fmt.Errorf("unknown ISO file %q", fileName)
 	}
-	offset := entry.Sector * sectorSize
-
-	// Try mmap first.
-	fd, err := os.Open(isoPath)
-	if err == nil {
-		data, err := mmapFile(fd, offset, entry.Size)
-		if err == nil {
-			// Note: caller must not modify data. fd stays open (leaked intentionally
-			// for long-lived audio buffers — OS reclaims on process exit).
-			return data, nil
-		}
-		fd.Close()
-	}
-
-	// Fallback to heap read.
-	return readISORange(isoPath, offset, entry.Size)
+	return readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
 }
 
 // readISORange reads size bytes from offset in the ISO file.

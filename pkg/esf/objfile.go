@@ -81,9 +81,8 @@ type ObjFile struct {
 	dict     map[int32]*ObjInfo
 	objCache map[int]Object
 
-	Debug    bool
-	ISOBase  int64  // byte offset of TUNARIA data within the ISO (0 for standalone ESF)
-	mmapFile *os.File // kept open for mmap lifetime (nil if not mmapped)
+	Debug   bool
+	ISOBase int64 // byte offset of TUNARIA data within the ISO (0 for standalone ESF)
 }
 
 // Object is implemented by all parsed ESF objects.
@@ -107,7 +106,6 @@ func Open(path string) (*ObjFile, error) {
 
 // OpenISO extracts TUNARIA.ESF from an EQOA ISO image.
 // TUNARIA.ESF occupies sectors 520000–1006934 on disc.
-// Uses mmap to avoid loading ~1GB into heap memory.
 func OpenISO(isoPath string) (*ObjFile, error) {
 	const (
 		sectorSize         = 2048
@@ -121,87 +119,36 @@ func OpenISO(isoPath string) (*ObjFile, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Try mmap first — keeps data out of Go heap, OS pages in/out as needed.
-	data, err := mmapFile(fd, tunariaByteOffset, tunariaByteSize)
-	if err != nil {
-		// Fallback to heap read if mmap fails.
-		fd.Close()
-		log.Printf("esf: mmap failed (%v), falling back to heap read", err)
-		return openISOHeap(isoPath, tunariaByteOffset, tunariaByteSize)
-	}
-
-	// Verify OBJF magic
-	if len(data) < 32 {
-		munmapFile(data)
-		fd.Close()
-		return nil, fmt.Errorf("TUNARIA data too small (%d bytes)", len(data))
-	}
-	magic := string([]byte{data[3], data[2], data[1], data[0]})
-	if magic != "OBJF" {
-		munmapFile(data)
-		fd.Close()
-		return nil, fmt.Errorf("no OBJF magic at ISO offset 0x%x, got %q", tunariaByteOffset, magic)
-	}
-
-	log.Printf("esf: TUNARIA.ESF mmapped (%d MB) — not on Go heap", tunariaByteSize/(1024*1024))
-
-	f := &ObjFile{
-		data:     data,
-		objCache: make(map[int]Object),
-		ISOBase:  int64(tunariaByteOffset),
-		mmapFile: fd, // keep fd open for mmap lifetime
-	}
-	if err := f.readFileHeader(); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return f, nil
-}
-
-// openISOHeap is the fallback path when mmap is not available.
-func openISOHeap(isoPath string, offset, size int64) (*ObjFile, error) {
-	fd, err := os.Open(isoPath)
-	if err != nil {
-		return nil, err
-	}
 	defer fd.Close()
 
-	if _, err := fd.Seek(offset, 0); err != nil {
+	if _, err := fd.Seek(int64(tunariaByteOffset), 0); err != nil {
 		return nil, fmt.Errorf("ISO seek to TUNARIA offset: %w", err)
 	}
 
-	data := make([]byte, size)
+	data := make([]byte, tunariaByteSize)
 	n, err := fd.Read(data)
 	if err != nil {
 		return nil, fmt.Errorf("ISO read TUNARIA: %w", err)
 	}
 	data = data[:n]
 
+	if len(data) < 32 {
+		return nil, fmt.Errorf("TUNARIA data too small (%d bytes)", len(data))
+	}
 	magic := string([]byte{data[3], data[2], data[1], data[0]})
 	if magic != "OBJF" {
-		return nil, fmt.Errorf("no OBJF magic at ISO offset 0x%x, got %q", offset, magic)
+		return nil, fmt.Errorf("no OBJF magic at ISO offset 0x%x, got %q", tunariaByteOffset, magic)
 	}
 
 	f := &ObjFile{
 		data:     data,
 		objCache: make(map[int]Object),
-		ISOBase:  offset,
+		ISOBase:  int64(tunariaByteOffset),
 	}
 	if err := f.readFileHeader(); err != nil {
 		return nil, err
 	}
 	return f, nil
-}
-
-// Close releases mmap resources if applicable.
-func (f *ObjFile) Close() {
-	if f.mmapFile != nil {
-		munmapFile(f.data)
-		f.mmapFile.Close()
-		f.mmapFile = nil
-		f.data = nil
-	}
 }
 
 // OpenBytes parses an ESF file from a byte slice.
