@@ -501,8 +501,9 @@ func listAllZones(file *esf.ObjFile, root *esf.ObjInfo) {
 			name = "(unnamed)"
 		}
 		dim := z.BBox.Dimensions()
-		fmt.Printf("Zone %3d: %s  center=(%.0f, %.0f, %.0f)  size=%.0fx%.0f\n",
-			i, name, z.Center.X, z.Center.Y, z.Center.Z, dim.X, dim.Z)
+		fmt.Printf("Zone %3d: %s  center=(%.0f, %.0f, %.0f)  size=%.0fx%.0f  bbox=(%.0f,%.0f,%.0f)-(%.0f,%.0f,%.0f)\n",
+			i, name, z.Center.X, z.Center.Y, z.Center.Z, dim.X, dim.Z,
+			z.BBox.MinX, z.BBox.MinY, z.BBox.MinZ, z.BBox.MaxX, z.BBox.MaxY, z.BBox.MaxZ)
 	}
 }
 
