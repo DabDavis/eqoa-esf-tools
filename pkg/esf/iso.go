@@ -238,13 +238,28 @@ func ISOHasFile(fileName string) bool {
 }
 
 // ReadISOFileRaw reads raw bytes of a named file from the ISO without parsing.
-// Use this for non-ESF files (e.g. BGM audio). Returns nil, error if not found.
+// Uses mmap when possible to avoid heap allocation. Returns nil, error if not found.
 func ReadISOFileRaw(isoPath, fileName string) ([]byte, error) {
 	entry, ok := isoFileTable[fileName]
 	if !ok {
 		return nil, fmt.Errorf("unknown ISO file %q", fileName)
 	}
-	return readISORange(isoPath, entry.Sector*sectorSize, entry.Size)
+	offset := entry.Sector * sectorSize
+
+	// Try mmap first.
+	fd, err := os.Open(isoPath)
+	if err == nil {
+		data, err := mmapFile(fd, offset, entry.Size)
+		if err == nil {
+			// Note: caller must not modify data. fd stays open (leaked intentionally
+			// for long-lived audio buffers — OS reclaims on process exit).
+			return data, nil
+		}
+		fd.Close()
+	}
+
+	// Fallback to heap read.
+	return readISORange(isoPath, offset, entry.Size)
 }
 
 // readISORange reads size bytes from offset in the ISO file.
