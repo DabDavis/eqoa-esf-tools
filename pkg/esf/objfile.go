@@ -386,6 +386,14 @@ func (f *ObjFile) FindObject(id int32) (Object, error) {
 	return f.GetObject(info)
 }
 
+// ReleaseCache drops the parsed object cache, freeing memory for GC.
+// The ObjFile remains usable — objects will be re-parsed on next GetObject call.
+func (f *ObjFile) ReleaseCache() {
+	for k := range f.objCache {
+		delete(f.objCache, k)
+	}
+}
+
 // GetObject loads and caches an object from its ObjInfo.
 func (f *ObjFile) GetObject(info *ObjInfo) (Object, error) {
 	if cached, ok := f.objCache[info.Offset]; ok {
