@@ -135,10 +135,17 @@ func OpenISO(isoPath string) (*ObjFile, error) {
 	// object tree to build the offset map). After parsing, we switch to streaming
 	// mode — drop the bulk data and only keep the file handle.
 	data := make([]byte, tunariaByteSize)
-	n, err := fd.ReadAt(data, int64(tunariaByteOffset))
-	if err != nil && n < 32 {
+	n := 0
+	for n < tunariaByteSize {
+		nr, err := fd.ReadAt(data[n:], int64(tunariaByteOffset)+int64(n))
+		n += nr
+		if err != nil {
+			break
+		}
+	}
+	if n < 32 {
 		fd.Close()
-		return nil, fmt.Errorf("ISO read TUNARIA: %w", err)
+		return nil, fmt.Errorf("ISO read TUNARIA: only got %d bytes", n)
 	}
 	data = data[:n]
 

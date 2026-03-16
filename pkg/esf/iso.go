@@ -204,11 +204,19 @@ func OpenISOFile(isoPath, fileName string) (*ObjFile, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Read full file — ReadAt may short-read for large files, so loop.
 		data := make([]byte, entry.Size)
-		n, err := fd.ReadAt(data, offset)
-		if err != nil && n < 32 {
+		n := 0
+		for int64(n) < entry.Size {
+			nr, err := fd.ReadAt(data[n:], offset+int64(n))
+			n += nr
+			if err != nil {
+				break
+			}
+		}
+		if n < 32 {
 			fd.Close()
-			return nil, fmt.Errorf("reading %s from ISO: %w", fileName, err)
+			return nil, fmt.Errorf("reading %s from ISO: only got %d bytes", fileName, n)
 		}
 		data = data[:n]
 
