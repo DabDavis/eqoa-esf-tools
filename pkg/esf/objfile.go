@@ -73,6 +73,9 @@ func (o *ObjInfo) String() string {
 }
 
 // ObjFile is the main ESF file parser.
+// Supports two modes:
+//   - In-memory: data[] holds the entire file (small ESF/CSF files)
+//   - Streaming: fileHandle is set, data is loaded on demand via ensureData()
 type ObjFile struct {
 	data     []byte
 	pos      int
@@ -83,6 +86,13 @@ type ObjFile struct {
 
 	Debug   bool
 	ISOBase int64 // byte offset of TUNARIA data within the ISO (0 for standalone ESF)
+
+	// Streaming mode fields
+	fileHandle *os.File // persistent file handle for streaming reads (nil = in-memory mode)
+	fileBase   int64    // byte offset within file where ESF data starts
+	fileSize   int64    // total ESF data size
+	winStart   int      // start offset of current window in data[]
+	winEnd     int      // end offset of current window in data[]
 }
 
 // Object is implemented by all parsed ESF objects.
@@ -104,8 +114,9 @@ func Open(path string) (*ObjFile, error) {
 	return OpenBytes(data)
 }
 
-// OpenISO extracts TUNARIA.ESF from an EQOA ISO image.
-// TUNARIA.ESF occupies sectors 520000–1006934 on disc.
+// OpenISO opens TUNARIA.ESF from an EQOA ISO image in streaming mode.
+// Only reads the header + object index (~1MB). Object data is loaded on demand
+// via ensureData() when GetObject/reader functions access specific offsets.
 func OpenISO(isoPath string) (*ObjFile, error) {
 	const (
 		sectorSize         = 2048
@@ -119,35 +130,51 @@ func OpenISO(isoPath string) (*ObjFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer fd.Close()
 
-	if _, err := fd.Seek(int64(tunariaByteOffset), 0); err != nil {
-		return nil, fmt.Errorf("ISO seek to TUNARIA offset: %w", err)
-	}
-
+	// Read the full file into memory for index parsing (parse() walks the entire
+	// object tree to build the offset map). After parsing, we switch to streaming
+	// mode — drop the bulk data and only keep the file handle.
 	data := make([]byte, tunariaByteSize)
-	n, err := fd.Read(data)
-	if err != nil {
+	n, err := fd.ReadAt(data, int64(tunariaByteOffset))
+	if err != nil && n < 32 {
+		fd.Close()
 		return nil, fmt.Errorf("ISO read TUNARIA: %w", err)
 	}
 	data = data[:n]
 
-	if len(data) < 32 {
-		return nil, fmt.Errorf("TUNARIA data too small (%d bytes)", len(data))
-	}
 	magic := string([]byte{data[3], data[2], data[1], data[0]})
 	if magic != "OBJF" {
+		fd.Close()
 		return nil, fmt.Errorf("no OBJF magic at ISO offset 0x%x, got %q", tunariaByteOffset, magic)
 	}
 
 	f := &ObjFile{
-		data:     data,
-		objCache: make(map[int]Object),
-		ISOBase:  int64(tunariaByteOffset),
+		data:       data,
+		objCache:   make(map[int]Object),
+		ISOBase:    int64(tunariaByteOffset),
+		fileHandle: fd,
+		fileBase:   int64(tunariaByteOffset),
+		fileSize:   int64(n),
 	}
 	if err := f.readFileHeader(); err != nil {
+		fd.Close()
 		return nil, err
 	}
+
+	// Parse the full object tree to build index (needs data in memory).
+	if _, err := f.Root(); err != nil {
+		fd.Close()
+		return nil, err
+	}
+
+	// Switch to streaming mode — release bulk data, keep only file handle.
+	// Object data will be loaded on demand via ensureData().
+	log.Printf("esf: TUNARIA index parsed (%d objects). Switching to streaming mode — releasing %d MB",
+		len(f.objects), len(f.data)/(1024*1024))
+	f.data = nil
+	f.winStart = 0
+	f.winEnd = 0
+
 	return f, nil
 }
 
@@ -312,7 +339,9 @@ func (f *ObjFile) DictKeys() []int32 {
 
 // ReadInt32At reads an int32 at the given byte offset in the file.
 func (f *ObjFile) ReadInt32At(offset int) int32 {
-	return int32(binary.LittleEndian.Uint32(f.data[offset:]))
+	f.ensureData(offset, 4)
+	sp := f.streamPos(offset)
+	return int32(binary.LittleEndian.Uint32(f.data[sp:]))
 }
 
 // FindObject looks up an object by dictionary ID.
@@ -433,23 +462,80 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 	}
 }
 
-// RawBytes returns a slice of the underlying file data.
+// Close releases the file handle for streaming mode.
+func (f *ObjFile) Close() {
+	if f.fileHandle != nil {
+		f.fileHandle.Close()
+		f.fileHandle = nil
+	}
+}
+
+// RawBytes returns a copy of file data at the given offset and size.
 func (f *ObjFile) Data() []byte { return f.data }
 
 func (f *ObjFile) RawBytes(offset, size int) []byte {
-	end := offset + size
+	f.ensureData(offset, size)
+	sp := f.streamPos(offset)
+	end := sp + size
 	if end > len(f.data) {
 		end = len(f.data)
 	}
-	if offset >= end {
+	if sp >= end {
 		return nil
 	}
-	return f.data[offset:end]
+	out := make([]byte, end-sp)
+	copy(out, f.data[sp:end])
+	return out
 }
 
 // Seek sets the read position.
 func (f *ObjFile) Seek(offset int) {
 	f.pos = offset
+}
+
+// ensureData guarantees that f.data[pos:pos+n] is readable.
+// In memory mode (fileHandle == nil), data is always available.
+// In streaming mode, loads a window from the file handle if needed.
+func (f *ObjFile) ensureData(pos, n int) {
+	if f.fileHandle == nil {
+		return // in-memory mode — data[] covers everything
+	}
+	end := pos + n
+	if pos >= f.winStart && end <= f.winEnd {
+		return // already in window
+	}
+	// Load a 256KB window centered on the requested region.
+	// This amortizes small sequential reads (e.g. parsing an object's fields).
+	const windowSize = 256 * 1024
+	winStart := pos
+	if winStart > windowSize/4 {
+		winStart -= windowSize / 4 // read a bit before pos for context
+	}
+	winSize := windowSize
+	if int64(winStart+winSize) > f.fileSize {
+		winSize = int(f.fileSize) - winStart
+	}
+	if winSize <= 0 {
+		return
+	}
+
+	buf := make([]byte, winSize)
+	nr, _ := f.fileHandle.ReadAt(buf, f.fileBase+int64(winStart))
+	if nr <= 0 {
+		return
+	}
+	f.data = buf[:nr]
+	f.winStart = winStart
+	f.winEnd = winStart + nr
+}
+
+// streamPos translates a logical ESF offset to an index into f.data[].
+// In memory mode, returns pos unchanged. In streaming mode, returns pos - winStart.
+func (f *ObjFile) streamPos(pos int) int {
+	if f.fileHandle == nil {
+		return pos
+	}
+	return pos - f.winStart
 }
 
 // Pos returns the current read position.
@@ -460,50 +546,66 @@ func (f *ObjFile) Pos() int {
 // --- Reader helpers (all little-endian) ---
 
 func (f *ObjFile) readByte() byte {
-	v := f.data[f.pos]
+	f.ensureData(f.pos, 1)
+	sp := f.streamPos(f.pos)
+	v := f.data[sp]
 	f.pos++
 	return v
 }
 
 func (f *ObjFile) readInt16() int16 {
-	v := int16(binary.LittleEndian.Uint16(f.data[f.pos:]))
+	f.ensureData(f.pos, 2)
+	sp := f.streamPos(f.pos)
+	v := int16(binary.LittleEndian.Uint16(f.data[sp:]))
 	f.pos += 2
 	return v
 }
 
 func (f *ObjFile) readUint16() uint16 {
-	v := binary.LittleEndian.Uint16(f.data[f.pos:])
+	f.ensureData(f.pos, 2)
+	sp := f.streamPos(f.pos)
+	v := binary.LittleEndian.Uint16(f.data[sp:])
 	f.pos += 2
 	return v
 }
 
 func (f *ObjFile) readInt32() int32 {
-	v := int32(binary.LittleEndian.Uint32(f.data[f.pos:]))
+	f.ensureData(f.pos, 4)
+	sp := f.streamPos(f.pos)
+	v := int32(binary.LittleEndian.Uint32(f.data[sp:]))
 	f.pos += 4
 	return v
 }
 
 func (f *ObjFile) readUint32() uint32 {
-	v := binary.LittleEndian.Uint32(f.data[f.pos:])
+	f.ensureData(f.pos, 4)
+	sp := f.streamPos(f.pos)
+	v := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
 	return v
 }
 
 func (f *ObjFile) readInt64() int64 {
-	v := int64(binary.LittleEndian.Uint64(f.data[f.pos:]))
+	f.ensureData(f.pos, 8)
+	sp := f.streamPos(f.pos)
+	v := int64(binary.LittleEndian.Uint64(f.data[sp:]))
 	f.pos += 8
 	return v
 }
 
 func (f *ObjFile) readFloat32() float32 {
-	bits := binary.LittleEndian.Uint32(f.data[f.pos:])
+	f.ensureData(f.pos, 4)
+	sp := f.streamPos(f.pos)
+	bits := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
 	return float32frombits(bits)
 }
 
 func (f *ObjFile) readBytes(n int) []byte {
+	f.ensureData(f.pos, n)
+	sp := f.streamPos(f.pos)
 	v := make([]byte, n)
-	copy(v, f.data[f.pos:f.pos+n])
+	copy(v, f.data[sp:sp+n])
 	f.pos += n
 	return v
 }
@@ -524,8 +626,10 @@ func (f *ObjFile) readBox() Box {
 }
 
 func (f *ObjFile) readColor() [4]byte {
+	f.ensureData(f.pos, 4)
+	sp := f.streamPos(f.pos)
 	var c [4]byte
-	copy(c[:], f.data[f.pos:f.pos+4])
+	copy(c[:], f.data[sp:sp+4])
 	f.pos += 4
 	return c
 }
@@ -535,7 +639,9 @@ func (f *ObjFile) readString() (string, error) {
 	if length < 0 || length > 1024 {
 		return "", fmt.Errorf("readString sanity: len=%d", length)
 	}
-	s := string(f.data[f.pos : f.pos+length])
+	f.ensureData(f.pos, length)
+	sp := f.streamPos(f.pos)
+	s := string(f.data[sp : sp+length])
 	f.pos += length
 	return s, nil
 }
