@@ -1117,6 +1117,65 @@ func GetZoneTree(file *ObjFile, zoneBase *ObjInfo) *ZoneTree {
 	return tree
 }
 
+// ResourceElem is one entry in the resource table (16 bytes).
+// PS2: VIResourceElem, parsed by ParseResourceTable (0x0043A698).
+// Maps a hash name (VIHashResourceID) to a resource offset and type.
+type ResourceElem struct {
+	Offset uint64 // resource offset/ID (8 bytes)
+	HashID uint32 // VIHashResourceID hash of the resource name
+	DictID uint32 // dictionary ID or resource type
+}
+
+// ResourceTable holds the zone's named resource lookup table (0x9000).
+// PS2 uses VIHashResourceID("name") to compute a hash, then searches
+// this table for the matching entry to find the sprite/resource.
+// Example: VIHashResourceID("Loading_Gears") = 1273269029 → HSprite in UI.ESF
+type ResourceTable struct {
+	Entries []ResourceElem
+}
+
+// GetResourceTable parses the resource table from a ZoneBase (0x9000).
+func GetResourceTable(file *ObjFile, zoneBase *ObjInfo) *ResourceTable {
+	rtInfo := zoneBase.Child(TypeResourceTable)
+	if rtInfo == nil {
+		return nil
+	}
+	file.Seek(rtInfo.Offset)
+	count := int(file.readInt32())
+	if count <= 0 || count > 100000 {
+		return nil
+	}
+	rt := &ResourceTable{
+		Entries: make([]ResourceElem, count),
+	}
+	for i := 0; i < count; i++ {
+		rt.Entries[i] = ResourceElem{
+			Offset: uint64(file.readInt64()),
+			HashID: file.readUint32(),
+			DictID: file.readUint32(),
+		}
+	}
+	return rt
+}
+
+// FindByHash searches the resource table for an entry matching the given
+// VIHashResourceID hash. Returns the entry and true if found.
+func (rt *ResourceTable) FindByHash(hashID uint32) (ResourceElem, bool) {
+	for _, e := range rt.Entries {
+		if e.HashID == hashID {
+			return e, true
+		}
+	}
+	return ResourceElem{}, false
+}
+
+// FindByName computes VIHashResourceID for the given name and searches
+// the resource table. Returns the entry and true if found.
+func (rt *ResourceTable) FindByName(name string) (ResourceElem, bool) {
+	hash := HashResourceID(name)
+	return rt.FindByHash(uint32(hash))
+}
+
 // ZoneRoomPortal describes a portal polygon connecting two rooms.
 type ZoneRoomPortal struct {
 	DestRoomID int32   // target room index (-1 = exterior)
