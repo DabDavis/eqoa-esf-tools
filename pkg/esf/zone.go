@@ -1056,6 +1056,67 @@ func (z *Zone) GetStaticLighting(file *ObjFile) ([]RoomStaticLighting, error) {
 	return result, nil
 }
 
+// ZoneTreeNode is one entry in the zone-level spatial quadtree (24 bytes).
+// Same structure as WorldTreeNode but used for intra-zone spatial queries
+// (actor/tile visibility culling).
+type ZoneTreeNode struct {
+	MinX, MinZ float32
+	MaxX, MaxZ float32
+	ChildA     uint32
+	ChildB     uint32
+}
+
+// ZoneTreeLeaf maps a tree leaf to a zone element (8 bytes per entry).
+// PS2: ParseZoneTree reads int32 + uint32 per leaf.
+type ZoneTreeLeaf struct {
+	Index int32  // actor/tile index
+	Flags uint32 // type or flags
+}
+
+// ZoneTree is a per-zone spatial quadtree for culling actors and tiles.
+// PS2: ParseZoneTree (0x00438950), type 0x3220.
+// Similar to WorldTree but operates within a single zone.
+type ZoneTree struct {
+	Nodes  []ZoneTreeNode
+	Leaves []ZoneTreeLeaf
+}
+
+// GetZoneTree parses the zone-level spatial tree from a ZoneBase (0x3220).
+func GetZoneTree(file *ObjFile, zoneBase *ObjInfo) *ZoneTree {
+	treeInfo := zoneBase.Child(TypeZoneTree)
+	if treeInfo == nil {
+		return nil
+	}
+	file.Seek(treeInfo.Offset)
+	numNodes := int(file.readInt32())
+	numLeaves := int(file.readInt32())
+
+	tree := &ZoneTree{
+		Nodes:  make([]ZoneTreeNode, numNodes),
+		Leaves: make([]ZoneTreeLeaf, numLeaves),
+	}
+
+	for i := 0; i < numNodes; i++ {
+		tree.Nodes[i] = ZoneTreeNode{
+			MinX:   file.readFloat32(),
+			MinZ:   file.readFloat32(),
+			MaxX:   file.readFloat32(),
+			MaxZ:   file.readFloat32(),
+			ChildA: file.readUint32(),
+			ChildB: file.readUint32(),
+		}
+	}
+
+	for i := 0; i < numLeaves; i++ {
+		tree.Leaves[i] = ZoneTreeLeaf{
+			Index: file.readInt32(),
+			Flags: file.readUint32(),
+		}
+	}
+
+	return tree
+}
+
 // ZoneRoomPortal describes a portal polygon connecting two rooms.
 type ZoneRoomPortal struct {
 	DestRoomID int32   // target room index (-1 = exterior)
