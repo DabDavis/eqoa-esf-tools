@@ -1176,6 +1176,54 @@ func (rt *ResourceTable) FindByName(name string) (ResourceElem, bool) {
 	return rt.FindByHash(uint32(hash))
 }
 
+// ZoneRoomActors maps actors to their containing room.
+// PS2: ParseZoneRoomActors (0x00438FE8) / ParseZoneRoomActorsObj (0x00439040).
+// Container 0x3270 holds 0x3280 entries, each with a roomIndex and a list of
+// actor sprite indices (0x6040). Used for portal-based culling — only render
+// actors in rooms visible through portals.
+type ZoneRoomActors struct {
+	// RoomActors[roomIndex] = list of actor/sprite indices in that room.
+	RoomActors map[int][]int32
+}
+
+// GetZoneRoomActors parses room→actor mappings from a ZoneBase.
+func GetZoneRoomActors(file *ObjFile, zoneBase *ObjInfo) *ZoneRoomActors {
+	container := zoneBase.Child(TypeZoneRoomActors)
+	if container == nil {
+		return nil
+	}
+
+	result := &ZoneRoomActors{RoomActors: make(map[int][]int32)}
+
+	for _, child := range container.Children {
+		if child.Type != TypeZoneRoomActors2 {
+			continue
+		}
+		file.Seek(child.Offset)
+		roomIndex := int(file.readInt32())
+
+		// The actor list is in a 0x6040 sub-container
+		actorContainer := child.Child(TypeZoneRoomActors3)
+		if actorContainer == nil {
+			continue
+		}
+
+		var actors []int32
+		for _, actorInfo := range actorContainer.Children {
+			// Each child is a ZoneActor (0x6000) — parse its sprite index
+			file.Seek(actorInfo.Offset)
+			spriteIdx := file.readInt32()
+			actors = append(actors, spriteIdx)
+		}
+
+		if len(actors) > 0 {
+			result.RoomActors[roomIndex] = actors
+		}
+	}
+
+	return result
+}
+
 // ZoneRoomPortal describes a portal polygon connecting two rooms.
 type ZoneRoomPortal struct {
 	DestRoomID int32   // target room index (-1 = exterior)
