@@ -425,6 +425,8 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 		return &CSprite{GroupSprite: GroupSprite{SimpleSprite: SimpleSprite{info: info, UsePretrans: true}}}
 	case TypeFloraSprite:
 		return &FloraSprite{SimpleSprite: SimpleSprite{info: info}}
+	case TypePointSprite:
+		return &PointSprite{info: info}
 	case TypeLODSprite:
 		return &LODSprite{SimpleSprite: SimpleSprite{info: info, UsePretrans: true}}
 	case TypeCSpriteVariant:

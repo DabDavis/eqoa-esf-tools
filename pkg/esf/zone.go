@@ -966,3 +966,75 @@ func (z *Zone) GetStaticLighting(file *ObjFile) ([]RoomStaticLighting, error) {
 
 	return result, nil
 }
+
+// ZoneRoomPortal describes a portal polygon connecting two rooms.
+type ZoneRoomPortal struct {
+	DestRoomID int32   // target room index (-1 = exterior)
+	Vertices   []Point // portal polygon vertices (world space)
+}
+
+// ZoneRoom describes a spatial cell in an indoor zone (caves, dungeons).
+// PS2: ParseZoneRoom (0x00438CF8), VIZoneRoom::Init (0x00499850).
+// Used for portal-based visibility culling.
+type ZoneRoom struct {
+	RoomID  uint32
+	Flags   uint32
+	BBox    Box
+	Portals []ZoneRoomPortal
+}
+
+// GetZoneRooms parses all rooms from a ZoneBase's ZoneRooms container (0x3230).
+// Returns nil if the zone has no rooms (outdoor zones).
+func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) []ZoneRoom {
+	roomsContainer := zoneBase.Child(TypeZoneRooms)
+	if roomsContainer == nil {
+		return nil
+	}
+
+	var rooms []ZoneRoom
+	for _, roomInfo := range roomsContainer.Children {
+		if roomInfo.Type != TypeZoneRoom {
+			continue
+		}
+		file.Seek(roomInfo.Offset)
+		ver := roomInfo.Version
+
+		roomID := file.readUint32()
+		flags := file.readUint32()
+		_ = file.readUint32() // unknown
+
+		var bbox Box
+		if ver >= 2 {
+			bbox.MinX = file.readFloat32()
+			bbox.MinY = file.readFloat32()
+			bbox.MinZ = file.readFloat32()
+			bbox.MaxX = file.readFloat32()
+			bbox.MaxY = file.readFloat32()
+			bbox.MaxZ = file.readFloat32()
+		}
+
+		numPortals := int(file.readInt32())
+		_ = file.readInt32() // total vertex count
+
+		room := ZoneRoom{RoomID: roomID, Flags: flags, BBox: bbox}
+
+		for p := 0; p < numPortals; p++ {
+			destRoom := file.readInt32()
+			numVerts := int(file.readInt32())
+			if ver < 2 {
+				_ = file.readInt32() // extra field in older versions
+			}
+			portal := ZoneRoomPortal{DestRoomID: destRoom, Vertices: make([]Point, numVerts)}
+			for v := 0; v < numVerts; v++ {
+				portal.Vertices[v].X = file.readFloat32()
+				portal.Vertices[v].Y = file.readFloat32()
+				portal.Vertices[v].Z = file.readFloat32()
+			}
+			room.Portals = append(room.Portals, portal)
+		}
+
+		rooms = append(rooms, room)
+	}
+
+	return rooms
+}
