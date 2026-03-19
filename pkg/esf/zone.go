@@ -761,16 +761,45 @@ func (h *WorldBaseHeader) Load(file *ObjFile) error {
 
 func (h *WorldBaseHeader) ObjInfo() *ObjInfo { return h.info }
 
+// WorldTreeNode is one entry in the spatial quadtree (24 bytes per node).
+// PS2: ParseWorldTree reads 4 floats (2D bbox) + 2 uint32 (child/leaf data).
+// Leaf nodes have child indices pointing into the LeafZones array.
+type WorldTreeNode struct {
+	MinX, MinZ float32 // 2D bounding rect
+	MaxX, MaxZ float32
+	ChildA     uint32 // left/first child index, or leaf zone start
+	ChildB     uint32 // right/second child index, or leaf zone count
+}
+
+// WorldTree is a 2D spatial quadtree for fast zone lookup by player position.
+// PS2: ParseWorldTree (0x0043A120), type 0x8230.
+// Each leaf node maps to zone proxy indices via LeafZones.
+type WorldTree struct {
+	Nodes     []WorldTreeNode
+	LeafZones []int32 // zone proxy indices referenced by leaf nodes
+}
+
+// WorldRegions maps each zone proxy to a region ID (biome/area type).
+// PS2: ParseWorldRegions (0x0043A2A8), type 0x8240.
+// One byte per zone proxy. Used for terrain profile blending (different
+// ambient/fog/sky color curves per biome).
+type WorldRegions struct {
+	RegionIDs []uint8 // one per zone proxy
+}
+
 // WorldBase is a container for world spatial data (0x8200).
 // PS2: ParseWorldBase (0x00439CA0).
 // Children: WorldBaseHeader (0x8220), WorldTree (0x8230), WorldZoneProxies (0x8210),
 // WorldRegions (0x8240, ver >= 2).
 type WorldBase struct {
-	info   *ObjInfo
-	Header *WorldBaseHeader
+	info    *ObjInfo
+	Header  *WorldBaseHeader
+	Tree    *WorldTree
+	Regions *WorldRegions
 }
 
 func (w *WorldBase) Load(file *ObjFile) error {
+	// Parse header
 	hdrInfo := w.info.Child(TypeWorldBaseHeader)
 	if hdrInfo != nil {
 		obj, err := file.GetObject(hdrInfo)
@@ -781,6 +810,66 @@ func (w *WorldBase) Load(file *ObjFile) error {
 			w.Header = obj.(*WorldBaseHeader)
 		}
 	}
+
+	// Parse world tree (0x8230)
+	treeInfo := w.info.Child(TypeWorldTree)
+	if treeInfo != nil {
+		file.Seek(treeInfo.Offset)
+		numNodes := int(file.readInt32())
+		numLeafZones := int(file.readInt32())
+
+		tree := &WorldTree{
+			Nodes:     make([]WorldTreeNode, numNodes),
+			LeafZones: make([]int32, numLeafZones),
+		}
+
+		// Per node: 4 floats (2D bbox) + 2 uint32 (children)
+		for i := 0; i < numNodes; i++ {
+			tree.Nodes[i] = WorldTreeNode{
+				MinX:   file.readFloat32(),
+				MinZ:   file.readFloat32(),
+				MaxX:   file.readFloat32(),
+				MaxZ:   file.readFloat32(),
+				ChildA: file.readUint32(),
+				ChildB: file.readUint32(),
+			}
+		}
+
+		// Leaf zone indices
+		for i := 0; i < numLeafZones; i++ {
+			tree.LeafZones[i] = file.readInt32()
+		}
+
+		w.Tree = tree
+	}
+
+	// Parse world regions (0x8240, ver >= 2)
+	regInfo := w.info.Child(TypeWorldRegions)
+	if regInfo != nil && w.Header != nil {
+		file.Seek(regInfo.Offset)
+		numProxies := int(w.Header.GridX) // total zone proxy count
+		if numProxies <= 0 {
+			// Fall back to counting from zone proxies
+			proxyInfo := w.info.Child(TypeWorldZoneProxies)
+			if proxyInfo != nil {
+				file.Seek(proxyInfo.Offset)
+				numProxies = int(file.readInt32())
+			}
+		}
+		if numProxies > 0 {
+			regions := &WorldRegions{
+				RegionIDs: make([]uint8, numProxies),
+			}
+			for i := 0; i < numProxies; i++ {
+				b := file.readBytes(1)
+			if len(b) > 0 {
+				regions.RegionIDs[i] = b[0]
+			}
+			}
+			w.Regions = regions
+		}
+	}
+
 	return nil
 }
 
