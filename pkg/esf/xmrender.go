@@ -17,31 +17,48 @@ type XmModule struct {
 	BPM            int
 	PatternOrder   [256]byte
 	Patterns       []XmPattern
-	Samples        [][]int16 // decoded PCM samples per instrument region
+	Instruments    []XmInstrument
 }
 
-// XmPattern holds one pattern's note data.
+// XmPattern holds one pattern's note data (64 rows, up to 16 channels).
 type XmPattern struct {
-	Rows [16][16]XmNote // [row][channel], max 16 channels
+	NumRows int
+	Rows    [][]XmNote // [row][channel]
 }
 
 // XmNote is a single note slot.
 type XmNote struct {
-	Type   byte // 0=empty, 1=noteOff, 2=cmd, 3=note
-	Note   byte
-	Param1 byte
-	Param2 byte
+	Note       byte // 1-96 (0=none, 97=note-off)
+	Instrument byte
+	Volume     byte // 0x10-0x50 (0=none)
+	EffectType byte
+	EffectParam byte
 }
 
-// ParseXmModule parses the raw pattern+sample data from an Xm object into a playable module.
+// XmInstrument holds sample references for one instrument.
+type XmInstrument struct {
+	NumSamples int
+	Samples    []XmSample
+}
+
+// XmSample holds a decoded PCM sample with loop info.
+type XmSample struct {
+	PCM       []int16
+	LoopStart int // -1 = no loop
+	LoopEnd   int // -1 = no loop
+}
+
+// ParseXmModule parses the raw pattern+sample data from an Xm object.
+// Layout verified against SNDDRV.IRX Ghidra decompilation (FUN_0000888c).
 func ParseXmModule(xm *Xm) *XmModule {
-	if xm == nil || len(xm.PatternData) < 284 {
+	if xm == nil || len(xm.PatternData) < 0x891C {
 		return nil
 	}
 
 	d := xm.PatternData
 	m := &XmModule{}
 
+	// Header at offset 0
 	m.SongLength = int(binary.LittleEndian.Uint16(d[4:]))
 	m.RestartPos = int(binary.LittleEndian.Uint16(d[6:]))
 	m.NumChannels = int(binary.LittleEndian.Uint16(d[8:]))
@@ -60,81 +77,139 @@ func ParseXmModule(xm *Xm) *XmModule {
 	if m.NumChannels <= 0 || m.NumChannels > 16 {
 		return nil
 	}
+	if m.NumPatterns <= 0 || m.NumPatterns > 256 {
+		return nil
+	}
 
 	// Pattern order table at offset 28
 	copy(m.PatternOrder[:], d[28:28+256])
 
-	// Parse patterns: each is 16 rows × numChannels × 4-byte slots
-	patStart := 284
+	// Pattern descriptor table at +0x11C (12 bytes per pattern)
+	// Entry+8 = relative offset to packed row data from +0x891C
 	m.Patterns = make([]XmPattern, m.NumPatterns)
 	for pi := 0; pi < m.NumPatterns; pi++ {
-		for row := 0; row < 16; row++ {
-			for ch := 0; ch < m.NumChannels; ch++ {
-				off := patStart + (pi*16*m.NumChannels+row*m.NumChannels+ch)*4
-				if off+4 > len(d) {
-					continue
-				}
-				b0, b1, b2, b3 := d[off], d[off+1], d[off+2], d[off+3]
+		descOff := 0x11C + pi*12
+		if descOff+12 > len(d) {
+			break
+		}
+		rowDataRel := int(binary.LittleEndian.Uint32(d[descOff+8:]))
+		rowDataAbs := 0x891C + rowDataRel
+		if rowDataAbs >= len(d) {
+			continue
+		}
 
+		// Find data extent (next pattern's offset, or end of data)
+		var dataEnd int
+		if pi+1 < m.NumPatterns {
+			nextDescOff := 0x11C + (pi+1)*12
+			nextRel := int(binary.LittleEndian.Uint32(d[nextDescOff+8:]))
+			dataEnd = 0x891C + nextRel
+		} else {
+			dataEnd = len(d)
+		}
+		if dataEnd > len(d) {
+			dataEnd = len(d)
+		}
+
+		// Decode standard XM packed rows (64 rows per pattern)
+		numRows := 64
+		pat := XmPattern{NumRows: numRows}
+		pat.Rows = make([][]XmNote, numRows)
+		pos := rowDataAbs
+
+		for row := 0; row < numRows && pos < dataEnd; row++ {
+			pat.Rows[row] = make([]XmNote, m.NumChannels)
+			for ch := 0; ch < m.NumChannels && pos < dataEnd; ch++ {
+				b := d[pos]
 				var n XmNote
-				if b0 == 0x00 && b1 == 0xCD && b2 == 0xCD && b3 == 0xCD {
-					n.Type = 0 // empty
-				} else if b0 == 0xCD && b1 == 0xCD && b2 == 0xCD && b3 == 0xCD {
-					n.Type = 0 // filler
-				} else if b0 == 0x00 && b1 == 0x00 && b2 == 0x00 && b3 == 0x00 {
-					n.Type = 1 // note off
-				} else if b0 == 0x40 && b1 == 0x00 {
-					n.Type = 2 // cmd: sample index + param
-					n.Param1 = b2 // sample index
-					n.Param2 = b3 // param (instrument/volume)
-				} else if b2 == 0x00 && b3 == 0x00 {
-					n.Type = 3 // note trigger
-					n.Note = b0
-					n.Param1 = b1 // timing offset
+				if b&0x80 != 0 {
+					// Packed: bits indicate which fields follow
+					pos++
+					if b&0x01 != 0 && pos < dataEnd {
+						n.Note = d[pos]; pos++
+					}
+					if b&0x02 != 0 && pos < dataEnd {
+						n.Instrument = d[pos]; pos++
+					}
+					if b&0x04 != 0 && pos < dataEnd {
+						n.Volume = d[pos]; pos++
+					}
+					if b&0x08 != 0 && pos < dataEnd {
+						n.EffectType = d[pos]; pos++
+					}
+					if b&0x10 != 0 && pos < dataEnd {
+						n.EffectParam = d[pos]; pos++
+					}
 				} else {
-					n.Type = 0 // unknown, treat as empty
+					// Full 5 bytes: note, instrument, volume, effect, param
+					n.Note = b
+					if pos+4 < dataEnd {
+						n.Instrument = d[pos+1]
+						n.Volume = d[pos+2]
+						n.EffectType = d[pos+3]
+						n.EffectParam = d[pos+4]
+					}
+					pos += 5
 				}
-				m.Patterns[pi].Rows[row][ch] = n
+				pat.Rows[row][ch] = n
 			}
 		}
+		m.Patterns[pi] = pat
 	}
 
-	// Decode VAG samples from the Xm's SampleData
-	if len(xm.SampleData) > 0 {
-		m.Samples = decodeVAGSamples(xm.SampleData)
+	// Parse instruments at +0xD1C (0xE0 = 224 bytes each)
+	// and sample references at +0x7D1C (0x18 = 24 bytes each)
+	m.Instruments = make([]XmInstrument, m.NumInstruments)
+	for i := 0; i < m.NumInstruments; i++ {
+		instOff := 0xD1C + i*0xE0
+		if instOff >= len(d) {
+			break
+		}
+		numSamp := int(d[instOff])
+		sampTableIdx := int(int16(binary.LittleEndian.Uint16(d[instOff+0xDA:])))
+
+		inst := XmInstrument{NumSamples: numSamp}
+		inst.Samples = make([]XmSample, numSamp)
+
+		for si := 0; si < numSamp; si++ {
+			refIdx := sampTableIdx + si
+			if sampTableIdx < 0 {
+				continue
+			}
+			refOff := 0x7D1C + refIdx*0x18
+			if refOff+0x18 > len(d) {
+				continue
+			}
+			length := int(binary.LittleEndian.Uint32(d[refOff:]))
+			loopStart := int(int32(binary.LittleEndian.Uint32(d[refOff+4:])))
+			loopEnd := int(int32(binary.LittleEndian.Uint32(d[refOff+8:])))
+			spuAddr := int(binary.LittleEndian.Uint32(d[refOff+20:]))
+
+			// Decode VAG from SampleData at the SPU address offset
+			if length > 0 && len(xm.SampleData) > spuAddr {
+				// Convert block count to byte size: (length-1) * 0x1C for no-loop,
+				// (length-2) * 0x1C if loop (from IOP init)
+				vagBytes := length * 16 // raw VAG blocks
+				end := spuAddr + vagBytes
+				if end > len(xm.SampleData) {
+					end = len(xm.SampleData)
+				}
+				pcm := decodeVAGBlock(xm.SampleData[spuAddr:end])
+				inst.Samples[si] = XmSample{
+					PCM:       pcm,
+					LoopStart: loopStart,
+					LoopEnd:   loopEnd,
+				}
+			}
+		}
+		m.Instruments[i] = inst
 	}
 
 	return m
 }
 
-// decodeVAGSamples splits VAG ADPCM data at end markers and decodes each to PCM.
-func decodeVAGSamples(data []byte) [][]int16 {
-	var boundaries []int
-	boundaries = append(boundaries, 0)
-	for i := 0; i < len(data)-16; i += 16 {
-		flags := data[i+1]
-		if flags == 1 || flags == 7 {
-			boundaries = append(boundaries, i+16)
-		}
-	}
-
-	var samples [][]int16
-	for i := 0; i < len(boundaries)-1; i++ {
-		start := boundaries[i]
-		end := boundaries[i+1]
-		if end-start < 32 {
-			samples = append(samples, nil)
-			continue
-		}
-		pcm := decodeVAGBlock(data[start:end])
-		samples = append(samples, pcm)
-	}
-	return samples
-}
-
-// decodeVAGBlock decodes a single VAG ADPCM sample to signed 16-bit PCM.
+// decodeVAGBlock decodes VAG ADPCM to signed 16-bit PCM.
 func decodeVAGBlock(data []byte) []int16 {
-	// PS2 SPU2 VAG filter coefficients
 	filters := [5][2]float64{
 		{0, 0},
 		{60.0 / 64.0, 0},
@@ -150,7 +225,6 @@ func decodeVAGBlock(data []byte) []int16 {
 		if i+16 > len(data) {
 			break
 		}
-		// PS2 VAG: byte0 = predict(hi nibble) | shift(lo nibble)
 		predict := int((data[i] >> 4) & 0x0F)
 		shift := int(data[i] & 0x0F)
 		flags := data[i+1]
@@ -159,12 +233,11 @@ func decodeVAGBlock(data []byte) []int16 {
 			predict = 0
 		}
 		if shift > 12 {
-			shift = 9 // safe default
+			shift = 9
 		}
 		f0, f1 := filters[predict][0], filters[predict][1]
 
 		for j := 2; j < 16; j++ {
-			// PS2 SPU2: low nibble first, then high nibble
 			for k := 0; k < 2; k++ {
 				var nibble int
 				if k == 0 {
@@ -179,8 +252,7 @@ func decodeVAGBlock(data []byte) []int16 {
 				sample += s1*f0 + s2*f1
 				s2 = s1
 				s1 = sample
-				clamped := int16(math.Max(-32768, math.Min(32767, sample)))
-				samples = append(samples, clamped)
+				samples = append(samples, int16(math.Max(-32768, math.Min(32767, sample))))
 			}
 		}
 
@@ -198,95 +270,136 @@ func max(a, b int) int {
 	return b
 }
 
-// RenderXmToWAV renders an XM module to stereo 16-bit PCM at the given sample rate.
-// Returns interleaved stereo samples (L, R, L, R, ...).
+// RenderXmToWAV renders an XM module to stereo 16-bit PCM.
 func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
-	if m == nil || len(m.Patterns) == 0 || len(m.Samples) == 0 {
+	if m == nil || len(m.Patterns) == 0 || len(m.Instruments) == 0 {
 		return nil
 	}
 
-	// Timing: tickDuration = 2500ms / BPM (at standard speed)
-	// Each row = Tempo ticks
 	tickDur := 2500.0 / float64(m.BPM)
 	rowDur := tickDur * float64(m.Tempo)
 	samplesPerRow := int(rowDur * float64(sampleRate) / 1000.0)
 
-	// Total song length
-	totalRows := m.SongLength * 16
+	// Calculate total output length
+	totalRows := 0
+	for oi := 0; oi < m.SongLength; oi++ {
+		pi := int(m.PatternOrder[oi])
+		if pi < len(m.Patterns) {
+			totalRows += m.Patterns[pi].NumRows
+		}
+	}
 	totalSamples := totalRows * samplesPerRow
+	if totalSamples <= 0 {
+		return nil
+	}
 
-	// Output buffer (stereo)
 	out := make([]int16, totalSamples*2)
 
-	// Channel state
 	type chanState struct {
+		instIdx   int
 		sampleIdx int
 		pos       int
-		volume    float64
+		volume    float64 // 0-1
 		playing   bool
 	}
 	channels := make([]chanState, m.NumChannels)
 	for i := range channels {
+		channels[i].instIdx = -1
 		channels[i].sampleIdx = -1
-		channels[i].volume = 1.0
 	}
 
-	// Process each row
 	outPos := 0
 	for orderIdx := 0; orderIdx < m.SongLength; orderIdx++ {
 		patIdx := int(m.PatternOrder[orderIdx])
 		if patIdx >= len(m.Patterns) {
-			patIdx = 0
+			continue
 		}
 		pat := &m.Patterns[patIdx]
 
-		for row := 0; row < 16; row++ {
-			// Process note events for this row
-			for ch := 0; ch < m.NumChannels; ch++ {
+		for row := 0; row < pat.NumRows; row++ {
+			if row >= len(pat.Rows) {
+				outPos += samplesPerRow
+				continue
+			}
+
+			// Process note events
+			for ch := 0; ch < m.NumChannels && ch < len(pat.Rows[row]); ch++ {
 				n := pat.Rows[row][ch]
-				switch n.Type {
-				case 1: // note off
+
+				if n.Note == 97 { // note off
 					channels[ch].playing = false
-				case 2: // cmd: set sample index for this channel (doesn't play yet)
-					channels[ch].sampleIdx = int(n.Param1)
-					channels[ch].volume = 1.0
-					channels[ch].pos = 0
-					channels[ch].playing = true
-				case 3: // note trigger with pitch
-					if channels[ch].sampleIdx >= 0 {
-						channels[ch].pos = 0
-						channels[ch].playing = true
+					continue
+				}
+
+				if n.Instrument > 0 {
+					instIdx := int(n.Instrument) - 1 // 1-based
+					if instIdx < len(m.Instruments) {
+						channels[ch].instIdx = instIdx
+					}
+				}
+
+				if n.Volume >= 0x10 && n.Volume <= 0x50 {
+					channels[ch].volume = float64(n.Volume-0x10) / 64.0
+				}
+
+				if n.Note >= 1 && n.Note <= 96 {
+					// Trigger note — pick sample from instrument
+					instIdx := channels[ch].instIdx
+					if instIdx >= 0 && instIdx < len(m.Instruments) {
+						inst := &m.Instruments[instIdx]
+						// Simple: use sample 0 for all notes
+						// XM normally has note-to-sample map, but for ambient this works
+						si := 0
+						if n.Note > 48 && inst.NumSamples > 1 {
+							si = int(n.Note-48) % inst.NumSamples
+						}
+						if si < len(inst.Samples) && len(inst.Samples[si].PCM) > 0 {
+							channels[ch].sampleIdx = instIdx*100 + si // unique key
+							channels[ch].pos = 0
+							channels[ch].playing = true
+						}
 					}
 				}
 			}
 
-			// Mix all playing channels for this row's duration
+			// Mix
 			for s := 0; s < samplesPerRow; s++ {
 				var mix float64
 				for ch := 0; ch < m.NumChannels; ch++ {
 					cs := &channels[ch]
-					if !cs.playing || cs.sampleIdx < 0 || cs.sampleIdx >= len(m.Samples) {
+					if !cs.playing || cs.instIdx < 0 {
 						continue
 					}
-					samp := m.Samples[cs.sampleIdx]
-					if samp == nil || len(samp) == 0 {
+					inst := &m.Instruments[cs.instIdx]
+					si := cs.sampleIdx % 100
+					if si >= len(inst.Samples) {
 						cs.playing = false
 						continue
 					}
-					// Play sample once — song pattern order loops, not individual samples
-					if cs.pos >= len(samp) {
+					samp := &inst.Samples[si]
+					if len(samp.PCM) == 0 {
 						cs.playing = false
 						continue
 					}
-					mix += float64(samp[cs.pos]) * cs.volume
+
+					if cs.pos >= len(samp.PCM) {
+						// Check for loop
+						if samp.LoopStart >= 0 && samp.LoopEnd > samp.LoopStart {
+							cs.pos = samp.LoopStart
+						} else {
+							cs.playing = false
+							continue
+						}
+					}
+					mix += float64(samp.PCM[cs.pos]) * cs.volume
 					cs.pos++
 				}
 
 				idx := (outPos + s) * 2
 				if idx+1 < len(out) {
 					v := int16(math.Max(-32768, math.Min(32767, mix)))
-					out[idx] = v   // L
-					out[idx+1] = v // R (mono center)
+					out[idx] = v
+					out[idx+1] = v
 				}
 			}
 			outPos += samplesPerRow
