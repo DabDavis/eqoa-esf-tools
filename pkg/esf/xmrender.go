@@ -236,9 +236,9 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 				switch n.Type {
 				case 1: // note off
 					channels[ch].playing = false
-				case 2: // cmd: set volume + instrument
-					channels[ch].volume = float64(n.Param1) / 64.0
-					channels[ch].sampleIdx = int(n.Param2)
+				case 2: // cmd: set sample + instrument
+					channels[ch].volume = 1.0
+					channels[ch].sampleIdx = int(n.Param1)
 					channels[ch].pos = 0
 					channels[ch].playing = true
 				case 3: // note trigger
