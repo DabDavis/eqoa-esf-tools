@@ -42,11 +42,6 @@ func ParseXmModule(xm *Xm) *XmModule {
 	d := xm.PatternData
 	m := &XmModule{}
 
-	// Header (offsets relative to pattern data, after DictID+vol+pan were stripped)
-	// But PatternData starts at headerBytes offset, after the 12-byte ESF header
-	// Actually Xm.PatternData is read from hdr.Offset+headerBytes, so it starts
-	// at the first byte after DictID+vol+pan = the XM module body
-
 	m.SongLength = int(binary.LittleEndian.Uint16(d[4:]))
 	m.RestartPos = int(binary.LittleEndian.Uint16(d[6:]))
 	m.NumChannels = int(binary.LittleEndian.Uint16(d[8:]))
@@ -89,9 +84,9 @@ func ParseXmModule(xm *Xm) *XmModule {
 				} else if b0 == 0x00 && b1 == 0x00 && b2 == 0x00 && b3 == 0x00 {
 					n.Type = 1 // note off
 				} else if b0 == 0x40 && b1 == 0x00 {
-					n.Type = 2 // cmd: volume + instrument
-					n.Param1 = b2 // volume
-					n.Param2 = b3 // instrument
+					n.Type = 2 // cmd: sample index + param
+					n.Param1 = b2 // sample index
+					n.Param2 = b3 // param (instrument/volume)
 				} else if b2 == 0x00 && b3 == 0x00 {
 					n.Type = 3 // note trigger
 					n.Note = b0
@@ -114,7 +109,6 @@ func ParseXmModule(xm *Xm) *XmModule {
 
 // decodeVAGSamples splits VAG ADPCM data at end markers and decodes each to PCM.
 func decodeVAGSamples(data []byte) [][]int16 {
-	// Find sample boundaries by scanning for end-of-sample flags
 	var boundaries []int
 	boundaries = append(boundaries, 0)
 	for i := 0; i < len(data)-16; i += 16 {
@@ -128,7 +122,7 @@ func decodeVAGSamples(data []byte) [][]int16 {
 	for i := 0; i < len(boundaries)-1; i++ {
 		start := boundaries[i]
 		end := boundaries[i+1]
-		if end-start < 32 { // skip tiny samples
+		if end-start < 32 {
 			samples = append(samples, nil)
 			continue
 		}
@@ -140,6 +134,7 @@ func decodeVAGSamples(data []byte) [][]int16 {
 
 // decodeVAGBlock decodes a single VAG ADPCM sample to signed 16-bit PCM.
 func decodeVAGBlock(data []byte) []int16 {
+	// PS2 SPU2 VAG filter coefficients
 	filters := [5][2]float64{
 		{0, 0},
 		{60.0 / 64.0, 0},
@@ -155,24 +150,32 @@ func decodeVAGBlock(data []byte) []int16 {
 		if i+16 > len(data) {
 			break
 		}
-		shift := int(data[i] & 0x0F)
+		// PS2 VAG: byte0 = predict(hi nibble) | shift(lo nibble)
 		predict := int((data[i] >> 4) & 0x0F)
+		shift := int(data[i] & 0x0F)
 		flags := data[i+1]
 
 		if predict > 4 {
 			predict = 0
 		}
 		if shift > 12 {
-			shift = 12
+			shift = 9 // safe default
 		}
 		f0, f1 := filters[predict][0], filters[predict][1]
 
 		for j := 2; j < 16; j++ {
-			for _, nibble := range []int{int(data[i+j] & 0x0F), int((data[i+j] >> 4) & 0x0F)} {
+			// PS2 SPU2: low nibble first, then high nibble
+			for k := 0; k < 2; k++ {
+				var nibble int
+				if k == 0 {
+					nibble = int(data[i+j] & 0x0F)
+				} else {
+					nibble = int((data[i+j] >> 4) & 0x0F)
+				}
 				if nibble > 7 {
 					nibble -= 16
 				}
-				sample := float64(nibble) * float64(int(1)<<(12-shift))
+				sample := float64(nibble) * float64(int(1)<<max(0, 12-shift))
 				sample += s1*f0 + s2*f1
 				s2 = s1
 				s1 = sample
@@ -188,6 +191,13 @@ func decodeVAGBlock(data []byte) []int16 {
 	return samples
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // RenderXmToWAV renders an XM module to stereo 16-bit PCM at the given sample rate.
 // Returns interleaved stereo samples (L, R, L, R, ...).
 func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
@@ -197,12 +207,12 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 
 	// Timing: tickDuration = 2500ms / BPM (at standard speed)
 	// Each row = Tempo ticks
-	tickDur := 2500.0 / float64(m.BPM)                         // ms per tick
-	rowDur := tickDur * float64(m.Tempo)                        // ms per row
-	samplesPerRow := int(rowDur * float64(sampleRate) / 1000.0) // PCM samples per row
+	tickDur := 2500.0 / float64(m.BPM)
+	rowDur := tickDur * float64(m.Tempo)
+	samplesPerRow := int(rowDur * float64(sampleRate) / 1000.0)
 
 	// Total song length
-	totalRows := m.SongLength * 16 // songLength patterns × 16 rows each
+	totalRows := m.SongLength * 16
 	totalSamples := totalRows * samplesPerRow
 
 	// Output buffer (stereo)
@@ -210,14 +220,15 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 
 	// Channel state
 	type chanState struct {
-		sampleIdx int     // which sample is playing (-1 = none)
-		pos       int     // position within sample
-		volume    float64 // 0-1
+		sampleIdx int
+		pos       int
+		volume    float64
 		playing   bool
 	}
 	channels := make([]chanState, m.NumChannels)
 	for i := range channels {
 		channels[i].sampleIdx = -1
+		channels[i].volume = 1.0
 	}
 
 	// Process each row
@@ -236,14 +247,12 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 				switch n.Type {
 				case 1: // note off
 					channels[ch].playing = false
-				case 2: // cmd: set sample + instrument
-					channels[ch].volume = 1.0
+				case 2: // cmd: set sample index for this channel (doesn't play yet)
 					channels[ch].sampleIdx = int(n.Param1)
+					channels[ch].volume = 1.0
 					channels[ch].pos = 0
 					channels[ch].playing = true
-				case 3: // note trigger
-					// Note triggers a sample with pitch shift
-					// For now, just restart the current sample
+				case 3: // note trigger with pitch
 					if channels[ch].sampleIdx >= 0 {
 						channels[ch].pos = 0
 						channels[ch].playing = true
@@ -251,35 +260,32 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 				}
 			}
 
-			// Mix samples for this row
+			// Mix all playing channels for this row's duration
 			for s := 0; s < samplesPerRow; s++ {
-				var mixL, mixR float64
+				var mix float64
 				for ch := 0; ch < m.NumChannels; ch++ {
 					cs := &channels[ch]
 					if !cs.playing || cs.sampleIdx < 0 || cs.sampleIdx >= len(m.Samples) {
 						continue
 					}
 					samp := m.Samples[cs.sampleIdx]
-					if samp == nil || cs.pos >= len(samp) {
+					if samp == nil || len(samp) == 0 {
 						cs.playing = false
 						continue
 					}
-					val := float64(samp[cs.pos]) * cs.volume
-					// Simple stereo: alternate channels L/R
-					if ch%2 == 0 {
-						mixL += val
-					} else {
-						mixR += val
+					// Loop sample when reaching end
+					if cs.pos >= len(samp) {
+						cs.pos = 0
 					}
+					mix += float64(samp[cs.pos]) * cs.volume
 					cs.pos++
 				}
 
 				idx := (outPos + s) * 2
 				if idx+1 < len(out) {
-					l := int16(math.Max(-32768, math.Min(32767, mixL)))
-					r := int16(math.Max(-32768, math.Min(32767, mixR)))
-					out[idx] = l
-					out[idx+1] = r
+					v := int16(math.Max(-32768, math.Min(32767, mix)))
+					out[idx] = v   // L
+					out[idx+1] = v // R (mono center)
 				}
 			}
 			outPos += samplesPerRow
