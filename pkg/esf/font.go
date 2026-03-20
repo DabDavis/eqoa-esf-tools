@@ -158,14 +158,7 @@ func (f *Font) Atlas() (*image.NRGBA, map[uint16]GlyphRect) {
 			for x := 0; x < g.RowBytes; x++ {
 				v := g.Pixels[y*g.RowBytes+x]
 				if v > 0 {
-					// Scale palette index to 8-bit alpha.
-					// Font data uses small indices (0-2 typically):
-					// 0=transparent, 1=semi-opaque, 2=fully opaque.
-					a := uint8(255)
-					if v == 1 {
-						a = 128
-					}
-					img.Set(x0+x, y0+y, color.NRGBA{255, 255, 255, a})
+					img.Set(x0+x, y0+y, color.NRGBA{255, 255, 255, 255})
 				}
 			}
 		}
