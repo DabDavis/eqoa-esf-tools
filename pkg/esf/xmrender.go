@@ -306,13 +306,16 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 		posF      float64 // fractional sample position for pitch shifting
 		volume    float64 // 0-1
 		rate      float64 // playback rate relative to native (1.0 = normal)
+		fadeVol   float64 // fadeout volume (1.0 = full, decreases after note-off)
 		playing   bool
+		releasing bool // true = note-off triggered, fading out
 	}
 	channels := make([]chanState, m.NumChannels)
 	for i := range channels {
 		channels[i].instIdx = -1
 		channels[i].sampleIdx = -1
 		channels[i].rate = 1.0
+		channels[i].fadeVol = 1.0
 	}
 
 	outPos := 0
@@ -333,8 +336,8 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 			for ch := 0; ch < m.NumChannels && ch < len(pat.Rows[row]); ch++ {
 				n := pat.Rows[row][ch]
 
-				if n.Note == 97 { // note off
-					channels[ch].playing = false
+				if n.Note == 97 { // note off — start fadeout
+					channels[ch].releasing = true
 					continue
 				}
 
@@ -363,6 +366,8 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 							channels[ch].sampleIdx = instIdx*100 + si
 							channels[ch].posF = 0
 							channels[ch].playing = true
+							channels[ch].releasing = false
+							channels[ch].fadeVol = 1.0
 							// XM linear frequency: pitch relative to C-4 (note 49)
 							// Each semitone = 2^(1/12) ratio
 							// Note 49 = C-4 = native sample rate
@@ -411,8 +416,16 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 					if pos+1 < len(samp.PCM) {
 						s1 = float64(samp.PCM[pos+1])
 					}
-					mix += (s0 + (s1-s0)*frac) * cs.volume
+					mix += (s0 + (s1-s0)*frac) * cs.volume * cs.fadeVol
 					cs.posF += cs.rate
+					// Fadeout after note-off (PS2: decrements by fadeout rate per tick)
+					if cs.releasing {
+						cs.fadeVol -= 1.0 / float64(sampleRate) * 4.0 // ~250ms fade
+						if cs.fadeVol <= 0 {
+							cs.fadeVol = 0
+							cs.playing = false
+						}
+					}
 				}
 
 				idx := (outPos + s) * 2
