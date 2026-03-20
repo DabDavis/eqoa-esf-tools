@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 var mode string

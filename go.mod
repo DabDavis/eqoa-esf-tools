@@ -1,4 +1,4 @@
-module github.com/eqoa/pkg
+module github.com/DabDavis/eqoa-esf-tools
 
 go 1.24.0
 

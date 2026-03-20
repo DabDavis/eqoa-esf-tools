@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 // All 252 entries from GetUITexture table at 0x004EDAF8 (sheet 1 only)

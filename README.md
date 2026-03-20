@@ -208,7 +208,7 @@ survey_mp TUNARIA.ESF CHAR.ESF
 The `pkg/esf` package can be imported by other Go programs:
 
 ```go
-import "github.com/eqoa/pkg/pkg/esf"
+import "github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 
 // Open any ESF, CSF, or ISO file
 file, err := esf.Open("TUNARIA.ESF")      // standalone ESF
@@ -266,10 +266,10 @@ exporter.Write("zone.obj")
 ## Install
 
 ```bash
-go install github.com/eqoa/pkg/cmd/esfextract@latest
-go install github.com/eqoa/pkg/cmd/esfpatch@latest
-go install github.com/eqoa/pkg/cmd/esfimport@latest
-go install github.com/eqoa/pkg/cmd/esfrebuild@latest
+go install github.com/DabDavis/eqoa-esf-tools/cmd/esfextract@latest
+go install github.com/DabDavis/eqoa-esf-tools/cmd/esfpatch@latest
+go install github.com/DabDavis/eqoa-esf-tools/cmd/esfimport@latest
+go install github.com/DabDavis/eqoa-esf-tools/cmd/esfrebuild@latest
 ```
 
 Or build from source:

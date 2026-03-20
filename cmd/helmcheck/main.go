@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 // HelmTextures DictIDs extracted from PS2 EE memory dump VIRaster pool.

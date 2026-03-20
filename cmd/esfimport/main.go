@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 func main() {

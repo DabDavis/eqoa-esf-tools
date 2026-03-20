@@ -5,7 +5,7 @@ import (
 	"image/png"
 	"os"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 func main() {

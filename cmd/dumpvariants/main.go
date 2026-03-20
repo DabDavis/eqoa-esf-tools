@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/eqoa/pkg/pkg/esf"
+	"github.com/DabDavis/eqoa-esf-tools/pkg/esf"
 )
 
 const esfPath = "/home/sdg/claude-eqoa/extracted-assets/CHAR.ESF"
