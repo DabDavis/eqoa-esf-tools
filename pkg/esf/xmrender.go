@@ -37,8 +37,9 @@ type XmNote struct {
 
 // XmInstrument holds sample references for one instrument.
 type XmInstrument struct {
-	NumSamples int
-	Samples    []XmSample
+	NumSamples    int
+	NoteToSample  [96]byte // maps note 0-95 to sample index
+	Samples       []XmSample
 }
 
 // XmSample holds a decoded PCM sample with loop info.
@@ -169,6 +170,10 @@ func ParseXmModule(xm *Xm) *XmModule {
 		sampTableIdx := int(int16(binary.LittleEndian.Uint16(d[instOff+0xDA:])))
 
 		inst := XmInstrument{NumSamples: numSamp}
+		// Note-to-sample map: 96 bytes at instrument +4
+		if instOff+4+96 <= len(d) {
+			copy(inst.NoteToSample[:], d[instOff+4:instOff+4+96])
+		}
 		inst.Samples = make([]XmSample, numSamp)
 
 		for si := 0; si < numSamp; si++ {
@@ -298,14 +303,16 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 	type chanState struct {
 		instIdx   int
 		sampleIdx int
-		pos       int
+		posF      float64 // fractional sample position for pitch shifting
 		volume    float64 // 0-1
+		rate      float64 // playback rate relative to native (1.0 = normal)
 		playing   bool
 	}
 	channels := make([]chanState, m.NumChannels)
 	for i := range channels {
 		channels[i].instIdx = -1
 		channels[i].sampleIdx = -1
+		channels[i].rate = 1.0
 	}
 
 	outPos := 0
@@ -343,20 +350,24 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 				}
 
 				if n.Note >= 1 && n.Note <= 96 {
-					// Trigger note — pick sample from instrument
+					// Trigger note — use note-to-sample map and compute pitch
 					instIdx := channels[ch].instIdx
 					if instIdx >= 0 && instIdx < len(m.Instruments) {
 						inst := &m.Instruments[instIdx]
-						// Simple: use sample 0 for all notes
-						// XM normally has note-to-sample map, but for ambient this works
-						si := 0
-						if n.Note > 48 && inst.NumSamples > 1 {
-							si = int(n.Note-48) % inst.NumSamples
+						// Note-to-sample map (96 entries, note is 1-based)
+						si := int(inst.NoteToSample[n.Note-1])
+						if si >= inst.NumSamples {
+							si = 0
 						}
 						if si < len(inst.Samples) && len(inst.Samples[si].PCM) > 0 {
-							channels[ch].sampleIdx = instIdx*100 + si // unique key
-							channels[ch].pos = 0
+							channels[ch].sampleIdx = instIdx*100 + si
+							channels[ch].posF = 0
 							channels[ch].playing = true
+							// XM linear frequency: pitch relative to C-4 (note 49)
+							// Each semitone = 2^(1/12) ratio
+							// Note 49 = C-4 = native sample rate
+							semitones := float64(n.Note) - 49.0
+							channels[ch].rate = math.Pow(2.0, semitones/12.0)
 						}
 					}
 				}
@@ -382,17 +393,26 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 						continue
 					}
 
-					if cs.pos >= len(samp.PCM) {
+					pos := int(cs.posF)
+					if pos >= len(samp.PCM) {
 						// Check for loop
 						if samp.LoopStart >= 0 && samp.LoopEnd > samp.LoopStart {
-							cs.pos = samp.LoopStart
+							cs.posF = float64(samp.LoopStart)
+							pos = samp.LoopStart
 						} else {
 							cs.playing = false
 							continue
 						}
 					}
-					mix += float64(samp.PCM[cs.pos]) * cs.volume
-					cs.pos++
+					// Linear interpolation between adjacent samples
+					frac := cs.posF - float64(pos)
+					s0 := float64(samp.PCM[pos])
+					s1 := s0
+					if pos+1 < len(samp.PCM) {
+						s1 = float64(samp.PCM[pos+1])
+					}
+					mix += (s0 + (s1-s0)*frac) * cs.volume
+					cs.posF += cs.rate
 				}
 
 				idx := (outPos + s) * 2
