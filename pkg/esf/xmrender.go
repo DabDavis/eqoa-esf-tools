@@ -305,8 +305,10 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 		sampleIdx int
 		posF      float64 // fractional sample position for pitch shifting
 		volume    float64 // 0-1
+		pan       float64 // 0-1 (0=left, 0.5=center, 1=right)
 		rate      float64 // playback rate relative to native (1.0 = normal)
 		fadeVol   float64 // fadeout volume (1.0 = full, decreases after note-off)
+		volSlide  float64 // per-tick volume slide delta
 		playing   bool
 		releasing bool // true = note-off triggered, fading out
 	}
@@ -316,6 +318,8 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 		channels[i].sampleIdx = -1
 		channels[i].rate = 1.0
 		channels[i].fadeVol = 1.0
+		channels[i].pan = 0.5 // center
+		channels[i].volume = 1.0
 	}
 
 	outPos := 0
@@ -350,6 +354,30 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 
 				if n.Volume >= 0x10 && n.Volume <= 0x50 {
 					channels[ch].volume = float64(n.Volume-0x10) / 64.0
+				} else if n.Volume >= 0x60 && n.Volume <= 0x6F {
+					// Volume slide down: rate = low nibble
+					channels[ch].volSlide = -float64(n.Volume&0x0F) / 64.0
+				} else if n.Volume >= 0x70 && n.Volume <= 0x7F {
+					// Volume slide up: rate = low nibble
+					channels[ch].volSlide = float64(n.Volume&0x0F) / 64.0
+				} else if n.Volume >= 0xC0 && n.Volume <= 0xCF {
+					// Set panning: 0xC0=left, 0xCF=right
+					channels[ch].pan = float64(n.Volume&0x0F) / 15.0
+				}
+
+				// Effect column
+				if n.EffectType == 0x08 {
+					// Set panning: 0x00=left, 0x80=center, 0xFF=right
+					channels[ch].pan = float64(n.EffectParam) / 255.0
+				} else if n.EffectType == 0x0A {
+					// Volume slide: hi nibble = up, lo nibble = down
+					hi := float64(n.EffectParam >> 4)
+					lo := float64(n.EffectParam & 0x0F)
+					if hi > 0 {
+						channels[ch].volSlide = hi / 64.0
+					} else {
+						channels[ch].volSlide = -lo / 64.0
+					}
 				}
 
 				if n.Note >= 1 && n.Note <= 96 {
@@ -378,9 +406,9 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 				}
 			}
 
-			// Mix
+			// Mix with per-channel panning and volume slide
 			for s := 0; s < samplesPerRow; s++ {
-				var mix float64
+				var mixL, mixR float64
 				for ch := 0; ch < m.NumChannels; ch++ {
 					cs := &channels[ch]
 					if !cs.playing || cs.instIdx < 0 {
@@ -400,7 +428,6 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 
 					pos := int(cs.posF)
 					if pos >= len(samp.PCM) {
-						// Check for loop
 						if samp.LoopStart >= 0 && samp.LoopEnd > samp.LoopStart {
 							cs.posF = float64(samp.LoopStart)
 							pos = samp.LoopStart
@@ -409,18 +436,31 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 							continue
 						}
 					}
-					// Linear interpolation between adjacent samples
+					// Linear interpolation
 					frac := cs.posF - float64(pos)
 					s0 := float64(samp.PCM[pos])
 					s1 := s0
 					if pos+1 < len(samp.PCM) {
 						s1 = float64(samp.PCM[pos+1])
 					}
-					mix += (s0 + (s1-s0)*frac) * cs.volume * cs.fadeVol
+					val := (s0 + (s1-s0)*frac) * cs.volume * cs.fadeVol
+					// Stereo panning (PS2: pan 0=left, 0.5=center, 1=right)
+					mixL += val * (1.0 - cs.pan)
+					mixR += val * cs.pan
 					cs.posF += cs.rate
-					// Fadeout after note-off (PS2: decrements by fadeout rate per tick)
+
+					// Volume slide (per sample, not per tick — approximate)
+					if cs.volSlide != 0 {
+						cs.volume += cs.volSlide / float64(samplesPerRow)
+						if cs.volume < 0 {
+							cs.volume = 0
+						} else if cs.volume > 1 {
+							cs.volume = 1
+						}
+					}
+					// Fadeout after note-off
 					if cs.releasing {
-						cs.fadeVol -= 1.0 / float64(sampleRate) * 4.0 // ~250ms fade
+						cs.fadeVol -= 4.0 / float64(sampleRate)
 						if cs.fadeVol <= 0 {
 							cs.fadeVol = 0
 							cs.playing = false
@@ -430,9 +470,8 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 
 				idx := (outPos + s) * 2
 				if idx+1 < len(out) {
-					v := int16(math.Max(-32768, math.Min(32767, mix)))
-					out[idx] = v
-					out[idx+1] = v
+					out[idx] = int16(math.Max(-32768, math.Min(32767, mixL)))
+					out[idx+1] = int16(math.Max(-32768, math.Min(32767, mixR)))
 				}
 			}
 			outPos += samplesPerRow
