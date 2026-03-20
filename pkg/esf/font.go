@@ -141,6 +141,14 @@ func (f *Font) Atlas() (*image.NRGBA, map[uint16]GlyphRect) {
 	atlasH := rows * f.CharHeight
 
 	img := image.NewNRGBA(image.Rect(0, 0, atlasW, atlasH))
+	// Fill with white-transparent so Raylib tint multiplication works correctly.
+	// (0,0,0,0) background would produce black when tinted.
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 255   // R
+		img.Pix[i+1] = 255 // G
+		img.Pix[i+2] = 255 // B
+		img.Pix[i+3] = 0   // A = transparent
+	}
 	rects := make(map[uint16]GlyphRect)
 
 	idx := 0
