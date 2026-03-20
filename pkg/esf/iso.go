@@ -35,6 +35,8 @@ var isoFileTable = map[string]isoFileEntry{
 	"SKY.CSF":      {Sector: 83246, Size: 225960, IsCSF: true},
 	"SPELLFX.CSF":  {Sector: 84322, Size: 398377, IsCSF: true},
 	"UI.CSF":       {Sector: 78312, Size: 351790, IsCSF: true},
+	"ARIAL.CSF":    {Sector: 79845, Size: 5700, IsCSF: true},
+	"ARIALUI.CSF":  {Sector: 83357, Size: 203231, IsCSF: true},
 
 	// World ESF files (other continents, uncompressed)
 	"ODUS.ESF":     {Sector: 1006934, Size: 192453151, IsCSF: false},
