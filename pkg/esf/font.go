@@ -141,14 +141,7 @@ func (f *Font) Atlas() (*image.NRGBA, map[uint16]GlyphRect) {
 	atlasH := rows * f.CharHeight
 
 	img := image.NewNRGBA(image.Rect(0, 0, atlasW, atlasH))
-	// Fill with white-transparent so Raylib tint multiplication works correctly.
-	// (0,0,0,0) background would produce black when tinted.
-	for i := 0; i < len(img.Pix); i += 4 {
-		img.Pix[i] = 255   // R
-		img.Pix[i+1] = 255 // G
-		img.Pix[i+2] = 255 // B
-		img.Pix[i+3] = 0   // A = transparent
-	}
+	// Background stays (0,0,0,0) — Raylib handles alpha blending correctly.
 	rects := make(map[uint16]GlyphRect)
 
 	idx := 0
@@ -163,8 +156,15 @@ func (f *Font) Atlas() (*image.NRGBA, map[uint16]GlyphRect) {
 
 		for y := 0; y < f.CharHeight; y++ {
 			for x := 0; x < g.RowBytes; x++ {
-				a := g.Pixels[y*g.RowBytes+x]
-				if a > 0 {
+				v := g.Pixels[y*g.RowBytes+x]
+				if v > 0 {
+					// Scale palette index to 8-bit alpha.
+					// Font data uses small indices (0-2 typically):
+					// 0=transparent, 1=semi-opaque, 2=fully opaque.
+					a := uint8(255)
+					if v == 1 {
+						a = 128
+					}
 					img.Set(x0+x, y0+y, color.NRGBA{255, 255, 255, a})
 				}
 			}
