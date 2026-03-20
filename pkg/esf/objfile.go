@@ -467,6 +467,12 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 		return &ParticleDefinition{info: info}
 	case TypeEffectVolumeSprite:
 		return &EffectVolumeSprite{info: info}
+	case TypeStreamAudioSprite:
+		return &StreamAudioSprite{info: info}
+	case TypeAdpcm:
+		return &Adpcm{info: info}
+	case TypeSoundSprite:
+		return &SoundSprite{info: info}
 	case TypePointLight:
 		return &PointLight{info: info}
 	default:
