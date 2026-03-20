@@ -273,9 +273,10 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 						cs.playing = false
 						continue
 					}
-					// Loop sample when reaching end
+					// Play sample once — song pattern order loops, not individual samples
 					if cs.pos >= len(samp) {
-						cs.pos = 0
+						cs.playing = false
+						continue
 					}
 					mix += float64(samp[cs.pos]) * cs.volume
 					cs.pos++
