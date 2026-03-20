@@ -35,11 +35,22 @@ type XmNote struct {
 	EffectParam byte
 }
 
+// XmEnvPoint is a single envelope point (tick, value).
+type XmEnvPoint struct {
+	Tick  int
+	Value int // 0-64
+}
+
 // XmInstrument holds sample references for one instrument.
 type XmInstrument struct {
-	NumSamples    int
-	NoteToSample  [96]byte // maps note 0-95 to sample index
-	Samples       []XmSample
+	NumSamples     int
+	NoteToSample   [96]byte // maps note 0-95 to sample index
+	PanEnvPoints   []XmEnvPoint
+	PanEnvType     byte // bit 0=on, bit 1=sustain, bit 2=loop
+	PanSustainPt   int
+	PanLoopStart   int
+	PanLoopEnd     int
+	Samples        []XmSample
 }
 
 // XmSample holds a decoded PCM sample with loop info.
@@ -174,6 +185,24 @@ func ParseXmModule(xm *Xm) *XmModule {
 		if instOff+4+96 <= len(d) {
 			copy(inst.NoteToSample[:], d[instOff+4:instOff+4+96])
 		}
+		// Panning envelope: points at +148 (12 points × 4 bytes), params at +197-205
+		if instOff+206 <= len(d) {
+			inst.PanEnvType = d[instOff+205]
+			numPanPts := int(d[instOff+197])
+			inst.PanSustainPt = int(d[instOff+201])
+			inst.PanLoopStart = int(d[instOff+202])
+			inst.PanLoopEnd = int(d[instOff+203])
+			if inst.PanEnvType&1 != 0 && numPanPts > 0 && numPanPts <= 12 {
+				inst.PanEnvPoints = make([]XmEnvPoint, numPanPts)
+				for p := 0; p < numPanPts; p++ {
+					poff := instOff + 148 + p*4
+					inst.PanEnvPoints[p] = XmEnvPoint{
+						Tick:  int(binary.LittleEndian.Uint16(d[poff:])),
+						Value: int(binary.LittleEndian.Uint16(d[poff+2:])),
+					}
+				}
+			}
+		}
 		inst.Samples = make([]XmSample, numSamp)
 
 		for si := 0; si < numSamp; si++ {
@@ -301,16 +330,17 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 	out := make([]int16, totalSamples*2)
 
 	type chanState struct {
-		instIdx   int
-		sampleIdx int
-		posF      float64 // fractional sample position for pitch shifting
-		volume    float64 // 0-1
-		pan       float64 // 0-1 (0=left, 0.5=center, 1=right)
-		rate      float64 // playback rate relative to native (1.0 = normal)
-		fadeVol   float64 // fadeout volume (1.0 = full, decreases after note-off)
-		volSlide  float64 // per-tick volume slide delta
-		playing   bool
-		releasing bool // true = note-off triggered, fading out
+		instIdx    int
+		sampleIdx  int
+		posF       float64 // fractional sample position for pitch shifting
+		volume     float64 // 0-1
+		pan        float64 // 0-1 (0=left, 0.5=center, 1=right)
+		rate       float64 // playback rate relative to native (1.0 = normal)
+		fadeVol    float64 // fadeout volume (1.0 = full, decreases after note-off)
+		volSlide   float64 // per-tick volume slide delta
+		panEnvTick int     // current tick in panning envelope
+		playing    bool
+		releasing  bool // true = note-off triggered, fading out
 	}
 	channels := make([]chanState, m.NumChannels)
 	for i := range channels {
@@ -396,6 +426,7 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 							channels[ch].playing = true
 							channels[ch].releasing = false
 							channels[ch].fadeVol = 1.0
+							channels[ch].panEnvTick = 0
 							// XM linear frequency: pitch relative to C-4 (note 49)
 							// Each semitone = 2^(1/12) ratio
 							// Note 49 = C-4 = native sample rate
@@ -444,10 +475,21 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 						s1 = float64(samp.PCM[pos+1])
 					}
 					val := (s0 + (s1-s0)*frac) * cs.volume * cs.fadeVol
+					// Panning envelope modulation
+					pan := cs.pan
+					if cs.instIdx >= 0 && cs.instIdx < len(m.Instruments) {
+						envPan := evalPanEnvelope(&m.Instruments[cs.instIdx], cs.panEnvTick, cs.releasing)
+						if envPan >= 0 {
+							// XM panning envelope: 0=left, 32=center, 64=right
+							// Modulates the channel pan toward envelope value
+							pan = float64(envPan) / 64.0
+						}
+					}
 					// Stereo panning (PS2: pan 0=left, 0.5=center, 1=right)
-					mixL += val * (1.0 - cs.pan)
-					mixR += val * cs.pan
+					mixL += val * (1.0 - pan)
+					mixR += val * pan
 					cs.posF += cs.rate
+					cs.panEnvTick++
 
 					// Volume slide (per sample, not per tick — approximate)
 					if cs.volSlide != 0 {
@@ -479,4 +521,43 @@ func RenderXmToWAV(m *XmModule, sampleRate int) []int16 {
 	}
 
 	return out
+}
+
+// evalPanEnvelope evaluates the panning envelope at the given tick.
+// Returns 0-64 (XM panning value) or -1 if envelope is disabled.
+func evalPanEnvelope(inst *XmInstrument, tick int, releasing bool) int {
+	if inst.PanEnvType&1 == 0 || len(inst.PanEnvPoints) == 0 {
+		return -1
+	}
+
+	pts := inst.PanEnvPoints
+
+	// Sustain: hold at sustain point if not releasing
+	if inst.PanEnvType&2 != 0 && !releasing {
+		sp := inst.PanSustainPt
+		if sp < len(pts) && tick >= pts[sp].Tick {
+			return pts[sp].Value
+		}
+	}
+
+	// Find the two points surrounding the current tick
+	if tick <= pts[0].Tick {
+		return pts[0].Value
+	}
+	if tick >= pts[len(pts)-1].Tick {
+		return pts[len(pts)-1].Value
+	}
+
+	for i := 0; i < len(pts)-1; i++ {
+		if tick >= pts[i].Tick && tick < pts[i+1].Tick {
+			// Linear interpolation between points
+			dt := pts[i+1].Tick - pts[i].Tick
+			if dt <= 0 {
+				return pts[i].Value
+			}
+			t := float64(tick-pts[i].Tick) / float64(dt)
+			return pts[i].Value + int(t*float64(pts[i+1].Value-pts[i].Value))
+		}
+	}
+	return pts[len(pts)-1].Value
 }
