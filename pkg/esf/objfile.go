@@ -471,6 +471,8 @@ func (f *ObjFile) createObject(info *ObjInfo) Object {
 		return &StreamAudioSprite{info: info}
 	case TypeAdpcm:
 		return &Adpcm{info: info}
+	case TypeXm:
+		return &Xm{info: info}
 	case TypeSoundSprite:
 		return &SoundSprite{info: info}
 	case TypePointLight:

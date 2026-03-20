@@ -38,6 +38,9 @@ var isoFileTable = map[string]isoFileEntry{
 	"ARIAL.CSF":    {Sector: 79845, Size: 5700, IsCSF: true},
 	"ARIALUI.CSF":  {Sector: 83357, Size: 203231, IsCSF: true},
 
+	// Audio ESF files
+	"AMBTRACK.ESF": {Sector: 2331, Size: 2532489, IsCSF: false},
+
 	// World ESF files (other continents, uncompressed)
 	"ODUS.ESF":     {Sector: 1006934, Size: 192453151, IsCSF: false},
 	"RATHE.ESF":    {Sector: 1110589, Size: 99410791, IsCSF: false},

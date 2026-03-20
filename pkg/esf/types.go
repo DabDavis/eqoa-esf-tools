@@ -197,6 +197,8 @@ var objTypeRegistry = map[uint16]objTypeDef{
 	TypeAdpcmHeader:              {"AdpcmHeader", false, false},
 	TypeAdpcmData:               {"AdpcmData", false, false},
 	TypeXm:                       {"Xm", false, false},
+	0xB040:                       {"XmHeader", false, false},
+	0xB060:                       {"XmSampleData", false, false},
 	TypeSoundSprite:              {"SoundSprite", false, false},
 	TypeSoundSpriteHeader:        {"SoundSpriteHeader", true, true},
 	TypeParticleDefinition:       {"ParticleDefinition", false, false},
