@@ -845,16 +845,16 @@ func (w *WorldBase) Load(file *ObjFile) error {
 
 	// Parse world regions (0x8240, ver >= 2)
 	regInfo := w.info.Child(TypeWorldRegions)
-	if regInfo != nil && w.Header != nil {
+	if regInfo != nil {
 		file.Seek(regInfo.Offset)
-		numProxies := int(w.Header.GridX) // total zone proxy count
-		if numProxies <= 0 {
-			// Fall back to counting from zone proxies
-			proxyInfo := w.info.Child(TypeWorldZoneProxies)
-			if proxyInfo != nil {
-				file.Seek(proxyInfo.Offset)
-				numProxies = int(file.readInt32())
-			}
+		// PS2 reads world->numZones entries (one byte per zone proxy).
+		// Count from WorldZoneProxies or use ESF node size.
+		numProxies := int(regInfo.Size)
+		proxyInfo := w.info.Child(TypeWorldZoneProxies)
+		if proxyInfo != nil {
+			file.Seek(proxyInfo.Offset)
+			numProxies = int(file.readInt32())
+			file.Seek(regInfo.Offset)
 		}
 		if numProxies > 0 {
 			regions := &WorldRegions{
