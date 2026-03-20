@@ -244,12 +244,22 @@ exporter.Write("zone.obj")
 | HSprite | 0x2200 | Hierarchical (skeletal) sprite |
 | CSprite | 0x2700 | Character sprite with animations, equipment slots |
 | LODSprite | 0x2500 | Level-of-detail wrapper |
+| PointSprite | 0x2D00 | Point-based particle/effect sprite |
 | Zone | 0x6100 | World zone container |
+| ZoneTree | 0x3300 | Per-zone spatial quadtree |
+| ZoneRooms | 0x3350 | Portal-based room cells |
+| WorldTree | 0x3370 | World-level spatial quadtree for zone lookup |
+| WorldRegions | 0x3380 | Region metadata |
+| ResourceTable | 0x3390 | Named resource hash lookup |
+| RadialFlora | 0x32D0 | Procedural vegetation placement |
 | PrimBuffer | 0x4000 | GPU vertex/index buffer |
 | CollBuffer | 0x4100 | Collision mesh |
+| ColorBuffer | 0x4200 | Per-vertex color data |
 | Surface | 0x3000 | Texture data |
 | Material | 0x3200 | Material properties |
+| PointLight | 0x2B10 | Point light source |
 | HSpriteAnim | 0x2600 | Skeletal animation |
+| Font | 0x7000 | PS2 bitmap font (CLUT + per-char pixel data) |
 | SpellEffect | 0x7100 | Spell visual effect |
 | EffectVolume | 0xC300 | Fog, dust, leaf effects |
 
