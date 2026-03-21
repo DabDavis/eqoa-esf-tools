@@ -10,8 +10,9 @@ import (
 // NavMesh is a navigation mesh built from walkable triangles.
 // Triangles sharing edges form an adjacency graph for A* pathfinding.
 type NavMesh struct {
-	Tris  []NavTri   // all walkable triangles
-	Edges [][]NavEdge // adjacency list: Edges[triIdx] = neighbors
+	Tris     []NavTri   // all walkable triangles
+	Edges    [][]NavEdge // adjacency list: Edges[triIdx] = neighbors
+	Stitched int        // number of proximity-stitched boundary edge connections
 }
 
 // NavTri stores a walkable triangle with precomputed centroid.
@@ -120,7 +121,109 @@ func Build(triangles []InputTriangle) *NavMesh {
 		edges[b] = append(edges[b], NavEdge{To: a, Cost: cost, PX0: px0, PZ0: pz0, PX1: px1, PZ1: pz1})
 	}
 
-	return &NavMesh{Tris: tris, Edges: edges}
+	// Phase 4: Proximity-based edge stitching.
+	// Collision meshes from different zone actors don't share exact vertices.
+	// Find boundary edges (1 triangle only) that are close to other boundary
+	// edges and connect them. This bridges terrain↔building, building↔stairs, etc.
+	type boundaryEdge struct {
+		tri           int     // triangle index
+		mx, my, mz    float32 // edge midpoint
+		px0, pz0      float32 // endpoint 0
+		px1, pz1      float32 // endpoint 1
+	}
+	var boundaries []boundaryEdge
+	for ek, triList := range edgeMap {
+		if len(triList) != 1 {
+			continue
+		}
+		tri := triList[0]
+		t := &tris[tri]
+		// Resolve edge midpoint from quantized key
+		ex0, ey0, ez0 := float32(ek.a.x)/100, float32(ek.a.y)/100, float32(ek.a.z)/100
+		ex1, ey1, ez1 := float32(ek.b.x)/100, float32(ek.b.y)/100, float32(ek.b.z)/100
+		_ = t
+		boundaries = append(boundaries, boundaryEdge{
+			tri: tri,
+			mx:  (ex0 + ex1) / 2, my: (ey0 + ey1) / 2, mz: (ez0 + ez1) / 2,
+			px0: ex0, pz0: ez0, px1: ex1, pz1: ez1,
+		})
+	}
+
+	// For each boundary edge, find the closest boundary edge from a DIFFERENT triangle
+	// within stitchDist and connect them.
+	const stitchDist = float32(2.0) // max distance to stitch boundary edges
+	stitchDistSq := stitchDist * stitchDist
+	stitched := 0
+
+	// Build spatial buckets for boundary edges to avoid O(n²)
+	type bucketKey struct{ bx, bz int }
+	const bucketSize = 4.0
+	buckets := make(map[bucketKey][]int) // bucket → indices into boundaries
+	for i, be := range boundaries {
+		bk := bucketKey{int(be.mx / bucketSize), int(be.mz / bucketSize)}
+		buckets[bk] = append(buckets[bk], i)
+	}
+
+	for i, be := range boundaries {
+		bk := bucketKey{int(be.mx / bucketSize), int(be.mz / bucketSize)}
+		bestJ := -1
+		bestDist := stitchDistSq
+
+		// Search 3×3 neighborhood
+		for dbi := -1; dbi <= 1; dbi++ {
+			for dbj := -1; dbj <= 1; dbj++ {
+				nk := bucketKey{bk.bx + dbi, bk.bz + dbj}
+				for _, j := range buckets[nk] {
+					if j <= i {
+						continue // avoid duplicates
+					}
+					bo := boundaries[j]
+					if bo.tri == be.tri {
+						continue
+					}
+					// Already connected?
+					alreadyConnected := false
+					for _, e := range edges[be.tri] {
+						if e.To == bo.tri {
+							alreadyConnected = true
+							break
+						}
+					}
+					if alreadyConnected {
+						continue
+					}
+					// 3D distance between edge midpoints
+					dx := be.mx - bo.mx
+					dy := be.my - bo.my
+					dz := be.mz - bo.mz
+					d := dx*dx + dy*dy + dz*dz
+					if d < bestDist {
+						bestDist = d
+						bestJ = j
+					}
+				}
+			}
+		}
+
+		if bestJ >= 0 {
+			bo := boundaries[bestJ]
+			ta, tb := &tris[be.tri], &tris[bo.tri]
+			dx := ta.CX - tb.CX
+			dy := ta.CY - tb.CY
+			dz := ta.CZ - tb.CZ
+			cost := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+
+			// Portal = average of both edge midpoints
+			pmx := (be.mx + bo.mx) / 2
+			pmz := (be.mz + bo.mz) / 2
+
+			edges[be.tri] = append(edges[be.tri], NavEdge{To: bo.tri, Cost: cost, PX0: pmx, PZ0: pmz, PX1: pmx, PZ1: pmz})
+			edges[bo.tri] = append(edges[bo.tri], NavEdge{To: be.tri, Cost: cost, PX0: pmx, PZ0: pmz, PX1: pmx, PZ1: pmz})
+			stitched++
+		}
+	}
+
+	return &NavMesh{Tris: tris, Edges: edges, Stitched: stitched}
 }
 
 // TriCount returns the number of triangles in the navmesh.
