@@ -143,20 +143,32 @@ func (nm *NavMesh) EdgeCount() int {
 	return n / 2
 }
 
-// findTri returns the index of the triangle containing point (x,z), or -1.
-func (nm *NavMesh) findTri(x, z float32) int {
+// findTri returns the index of the triangle containing point (x,y,z), or -1.
+// When multiple triangles overlap in XZ (multi-level buildings), picks the one
+// closest in Y to the query point.
+func (nm *NavMesh) findTri(x, y, z float32) int {
+	// Collect all XZ-containing triangles, pick closest in Y
+	bestIdx := -1
+	bestYDist := float32(math.MaxFloat32)
 	for i, t := range nm.Tris {
 		if pointInTri2D(x, z, t.X0, t.Z0, t.X1, t.Z1, t.X2, t.Z2) {
-			return i
+			yDist := float32(math.Abs(float64(y - t.CY)))
+			if yDist < bestYDist {
+				bestYDist = yDist
+				bestIdx = i
+			}
 		}
 	}
-	// Fallback: nearest centroid within 32 units
+	if bestIdx >= 0 {
+		return bestIdx
+	}
+	// Fallback: nearest centroid within 32 units (3D distance)
 	bestDist := float32(math.MaxFloat32)
-	bestIdx := -1
 	for i, t := range nm.Tris {
 		dx := x - t.CX
+		dy := y - t.CY
 		dz := z - t.CZ
-		d := dx*dx + dz*dz
+		d := dx*dx + dy*dy + dz*dz
 		if d < bestDist {
 			bestDist = d
 			bestIdx = i
@@ -181,15 +193,16 @@ func sign2D(px, pz, ax, az, bx, bz float32) float32 {
 	return (px-bx)*(az-bz) - (ax-bx)*(pz-bz)
 }
 
-// FindPath returns a list of waypoints from (sx,sz) to (gx,gz) using A*.
+// FindPath returns a list of waypoints from (sx,sy,sz) to (gx,gy,gz) using A*.
+// Y coordinates are used to disambiguate multi-level geometry (buildings with floors).
 // Returns nil if no path exists or start/goal are off-mesh.
-func (nm *NavMesh) FindPath(sx, sz, gx, gz float32) []Waypoint {
+func (nm *NavMesh) FindPath(sx, sy, sz, gx, gy, gz float32) []Waypoint {
 	if nm == nil || len(nm.Tris) == 0 {
 		return nil
 	}
 
-	startTri := nm.findTri(sx, sz)
-	goalTri := nm.findTri(gx, gz)
+	startTri := nm.findTri(sx, sy, sz)
+	goalTri := nm.findTri(gx, gy, gz)
 	if startTri < 0 || goalTri < 0 {
 		return nil
 	}
