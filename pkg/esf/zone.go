@@ -1242,13 +1242,19 @@ type ZoneRoom struct {
 
 // GetZoneRooms parses all rooms from a ZoneBase's ZoneRooms container (0x3230).
 // Returns nil if the zone has no rooms (outdoor zones).
-func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) []ZoneRoom {
+func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) (rooms []ZoneRoom) {
+	// Recover from out-of-bounds reads in ESF data (some zones have
+	// truncated or version-mismatched room data).
+	defer func() {
+		if r := recover(); r != nil {
+			rooms = nil
+		}
+	}()
 	roomsContainer := zoneBase.Child(TypeZoneRooms)
 	if roomsContainer == nil {
 		return nil
 	}
 
-	var rooms []ZoneRoom
 	for _, roomInfo := range roomsContainer.Children {
 		if roomInfo.Type != TypeZoneRoom {
 			continue
@@ -1273,13 +1279,23 @@ func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) []ZoneRoom {
 		numPortals := int(file.readInt32())
 		_ = file.readInt32() // total vertex count
 
+		// Sanity check: skip rooms with invalid portal counts
+		if numPortals < 0 || numPortals > 1000 {
+			continue
+		}
+
 		room := ZoneRoom{RoomID: roomID, Flags: flags, BBox: bbox}
 
+		valid := true
 		for p := 0; p < numPortals; p++ {
 			destRoom := file.readInt32()
 			numVerts := int(file.readInt32())
 			if ver < 2 {
 				_ = file.readInt32() // extra field in older versions
+			}
+			if numVerts < 0 || numVerts > 100 {
+				valid = false
+				break
 			}
 			portal := ZoneRoomPortal{DestRoomID: destRoom, Vertices: make([]Point, numVerts)}
 			for v := 0; v < numVerts; v++ {
@@ -1290,7 +1306,9 @@ func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) []ZoneRoom {
 			room.Portals = append(room.Portals, portal)
 		}
 
-		rooms = append(rooms, room)
+		if valid {
+			rooms = append(rooms, room)
+		}
 	}
 
 	return rooms
