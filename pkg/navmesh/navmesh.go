@@ -10,9 +10,12 @@ import (
 // NavMesh is a navigation mesh built from walkable triangles.
 // Triangles sharing edges form an adjacency graph for A* pathfinding.
 type NavMesh struct {
-	Tris     []NavTri   // all walkable triangles
-	Edges    [][]NavEdge // adjacency list: Edges[triIdx] = neighbors
-	Stitched int        // number of proximity-stitched boundary edge connections
+	Tris       []NavTri   // all walkable triangles
+	Edges      [][]NavEdge // adjacency list: Edges[triIdx] = neighbors
+	Stitched   int        // number of proximity-stitched boundary edge connections
+	Components int        // number of connected components
+	LargestCC  int        // size of largest connected component
+	compID     []int      // component ID per triangle (for same-component checks)
 }
 
 // NavTri stores a walkable triangle with precomputed centroid.
@@ -223,7 +226,129 @@ func Build(triangles []InputTriangle) *NavMesh {
 		}
 	}
 
-	return &NavMesh{Tris: tris, Edges: edges, Stitched: stitched}
+	// Phase 5: Connected component analysis + cross-component stitching.
+	// Find connected components via BFS, then stitch the largest components
+	// by finding the closest centroid pairs between different components.
+	compID := make([]int, len(tris))
+	for i := range compID {
+		compID[i] = -1
+	}
+	numComponents := 0
+	compSizes := make(map[int]int)
+
+	for start := range tris {
+		if compID[start] >= 0 {
+			continue
+		}
+		// BFS from this triangle
+		cid := numComponents
+		numComponents++
+		queue := []int{start}
+		compID[start] = cid
+		size := 0
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			size++
+			for _, e := range edges[cur] {
+				if compID[e.To] < 0 {
+					compID[e.To] = cid
+					queue = append(queue, e.To)
+				}
+			}
+		}
+		compSizes[cid] = size
+	}
+
+	// Find largest component
+	largestCC := 0
+	for _, sz := range compSizes {
+		if sz > largestCC {
+			largestCC = sz
+		}
+	}
+
+	// Cross-component centroid stitching: for each small component, find the
+	// closest triangle in a different component and connect them.
+	// This handles cases where boundary edge stitching missed gaps > 2 units.
+	const crossStitchDist = float32(8.0)
+	crossStitchSq := crossStitchDist * crossStitchDist
+
+	// Build centroid spatial buckets
+	type cbKey struct{ bx, bz int }
+	const cbSize = 16.0
+	cBuckets := make(map[cbKey][]int)
+	for i, t := range tris {
+		bk := cbKey{int(t.CX / cbSize), int(t.CZ / cbSize)}
+		cBuckets[bk] = append(cBuckets[bk], i)
+	}
+
+	crossStitched := 0
+	for i, t := range tris {
+		bk := cbKey{int(t.CX / cbSize), int(t.CZ / cbSize)}
+		bestJ := -1
+		bestDist := crossStitchSq
+
+		for dbi := -1; dbi <= 1; dbi++ {
+			for dbj := -1; dbj <= 1; dbj++ {
+				nk := cbKey{bk.bx + dbi, bk.bz + dbj}
+				for _, j := range cBuckets[nk] {
+					if j <= i || compID[j] == compID[i] {
+						continue
+					}
+					o := &tris[j]
+					dx := t.CX - o.CX
+					dy := t.CY - o.CY
+					dz := t.CZ - o.CZ
+					d := dx*dx + dy*dy + dz*dz
+					if d < bestDist {
+						bestDist = d
+						bestJ = j
+					}
+				}
+			}
+		}
+
+		if bestJ >= 0 {
+			o := &tris[bestJ]
+			dx := t.CX - o.CX
+			dy := t.CY - o.CY
+			dz := t.CZ - o.CZ
+			cost := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+			pmx := (t.CX + o.CX) / 2
+			pmz := (t.CZ + o.CZ) / 2
+
+			edges[i] = append(edges[i], NavEdge{To: bestJ, Cost: cost, PX0: pmx, PZ0: pmz, PX1: pmx, PZ1: pmz})
+			edges[bestJ] = append(edges[bestJ], NavEdge{To: i, Cost: cost, PX0: pmx, PZ0: pmz, PX1: pmx, PZ1: pmz})
+
+			// Merge components
+			oldComp := compID[bestJ]
+			newComp := compID[i]
+			if oldComp != newComp {
+				for k := range compID {
+					if compID[k] == oldComp {
+						compID[k] = newComp
+					}
+				}
+			}
+			crossStitched++
+		}
+	}
+
+	// Recount components after cross-stitching
+	seen := make(map[int]bool)
+	for _, c := range compID {
+		seen[c] = true
+	}
+
+	return &NavMesh{
+		Tris:       tris,
+		Edges:      edges,
+		Stitched:   stitched + crossStitched,
+		Components: len(seen),
+		LargestCC:  largestCC,
+		compID:     compID,
+	}
 }
 
 // TriCount returns the number of triangles in the navmesh.
