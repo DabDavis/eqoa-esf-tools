@@ -67,7 +67,7 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 
 	packing1 := float32(1.0 / math.Pow(2, float64(p1)))
 	packing2 := float32(1.0 / math.Pow(2, float64(p2)))
-	_ = p3 // packing3 not currently used
+	packing3 := float32(1.0 / math.Pow(2, float64(p3))) // PS2: normal scaling factor
 
 	// Resolve preTranslations if parent is SimpleSubSprite with pretrans enabled
 	var preTranslations []Point
@@ -101,6 +101,33 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 		}
 
 		switch pbtype {
+		case 0:
+			// PS2: float vertices — pos(3×float32) + uv(2×float32) + normal(3×float32) + color(4×uint8)
+			for i := int32(0); i < nverts; i++ {
+				px := file.readFloat32()
+				py := file.readFloat32()
+				pz := file.readFloat32()
+				pu := file.readFloat32()
+				pv := file.readFloat32()
+				nx := file.readFloat32()
+				ny := file.readFloat32()
+				nz := file.readFloat32()
+				color := file.readBytes(4)
+
+				pb.BBox.Add(px, py, pz)
+
+				vtx := Vertex{
+					X: px, Y: py, Z: pz,
+					U: pu, V: pv,
+					NX: nx, NY: ny, NZ: nz,
+					R: float32(color[0]) / 255.0,
+					G: float32(color[1]) / 255.0,
+					B: float32(color[2]) / 255.0,
+					A: float32(color[3]) / 255.0,
+				}
+				vl.Vertices = append(vl.Vertices, vtx)
+			}
+
 		case 2, 4:
 			for i := int32(0); i < nverts; i++ {
 				x := file.readInt16()
@@ -135,9 +162,9 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 					Z:      pz,
 					U:      float32(u) * packing2,
 					V:      float32(v) * packing2,
-					NX:     float32(int8(normal[0])) / 127.0,
-					NY:     float32(int8(normal[1])) / 127.0,
-					NZ:     float32(int8(normal[2])) / 127.0,
+					NX:     float32(int8(normal[0])) * packing3,
+					NY:     float32(int8(normal[1])) * packing3,
+					NZ:     float32(int8(normal[2])) * packing3,
 					R:      float32(color[0]) / 255.0,
 					G:      float32(color[1]) / 255.0,
 					B:      float32(color[2]) / 255.0,
@@ -148,6 +175,8 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 			}
 
 		case 5:
+			// PS2 ParseSkinPrimBuffer: pos(3×int16) + uv(2×int16) + normal(3×int8)
+			// + color(4×uint8) + vgroup(int16). Bone/weight data stored separately.
 			for i := int32(0); i < nverts; i++ {
 				x := file.readInt16()
 				y := file.readInt16()
@@ -156,8 +185,8 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 				v := file.readInt16()
 
 				normal := file.readBytes(3)
-				bones := file.readBytes(4)
-				weights := file.readBytes(4)
+				color := file.readBytes(4)  // PS2: color, NOT bone indices
+				vgroup := file.readInt16()  // PS2: vertex group index
 
 				px := float32(x) * packing1
 				py := float32(y) * packing1
@@ -171,14 +200,15 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 					Z:      pz,
 					U:      float32(u) * packing2,
 					V:      float32(v) * packing2,
-					NX:     float32(int8(normal[0])) / 127.0,
-					NY:     float32(int8(normal[1])) / 127.0,
-					NZ:     float32(int8(normal[2])) / 127.0,
-					A:      1.0,
-					VGroup: -1,
+					NX:     float32(int8(normal[0])) * packing3,
+					NY:     float32(int8(normal[1])) * packing3,
+					NZ:     float32(int8(normal[2])) * packing3,
+					R:      float32(color[0]) / 255.0,
+					G:      float32(color[1]) / 255.0,
+					B:      float32(color[2]) / 255.0,
+					A:      float32(color[3]) / 255.0,
+					VGroup: vgroup,
 				}
-				copy(vtx.BoneIdx[:], bones)
-				copy(vtx.BoneWeight[:], weights)
 				vl.Vertices = append(vl.Vertices, vtx)
 			}
 		}
