@@ -188,6 +188,10 @@ func RunParserTree(eeDump []byte, parserAddr uint32, file *esf.ObjFile, data []b
 	// then dispatches to the type-specific parser. We pre-call ReadBegin.
 	stream.ReadBegin()
 
+	// Zero fake pointer regions to prevent stale EE dump data from
+	// causing incorrect branch decisions in the PS2 parser.
+	zeroFakePointers(interp)
+
 	// Set up VIESFParse context
 	thisAddr := uint32(0x01FE0000)
 	for i := uint32(0); i < 512; i++ {

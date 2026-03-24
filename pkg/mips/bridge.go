@@ -288,17 +288,28 @@ func (m *Interp) handleRead(name string) {
 	}
 }
 
+// zeroFakePointers zeros memory at all fake pointer addresses so that
+// reads from fake objects return 0 instead of stale EE dump data.
+// Critical: the EE dump may have non-zero data at these addresses from
+// the game's runtime state, causing incorrect branch decisions.
+func zeroFakePointers(interp *Interp) {
+	// Each fake pointer region: 256 bytes should cover any struct fields
+	for _, base := range []uint32{0x01F60000, 0x01F70000, 0x01F80000,
+		0x01F90000, 0x01FA0000, 0x01FB0000, 0x01FC0000, 0x01FD0000} {
+		for i := uint32(0); i < 256; i++ {
+			interp.Store8At(base+i, 0)
+		}
+	}
+}
+
 // RunParserV0 runs a v0 sub-parser (ParsePrimBufferObjV0, etc.) on object data.
 // The stream is pre-positioned past the 8-byte ESF header, and ReadBegin state
 // is pre-populated, matching how the parent parser calls the v0 function.
 func RunParserV0(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
 	interp := New(eeDump)
 	esf := NewESFStream(objData)
-
-	// Pre-call ReadBegin to set up object stack (parent parser does this)
 	esf.ReadBegin()
-
-	// Set up context
+	zeroFakePointers(interp)
 	thisAddr := uint32(0x01FE0000)
 	for i := uint32(0); i < 512; i++ {
 		interp.Store8At(thisAddr+i, 0)
@@ -318,8 +329,7 @@ func RunParserV0(eeDump []byte, parserAddr uint32, objData []byte) (int32, []Rea
 func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
 	interp := New(eeDump)
 	esf := NewESFStream(objData)
-
-	// Set up VIESFParse context struct
+	zeroFakePointers(interp)
 	thisAddr := uint32(0x01FE0000)
 	for i := uint32(0); i < 512; i++ {
 		interp.Store8At(thisAddr+i, 0)

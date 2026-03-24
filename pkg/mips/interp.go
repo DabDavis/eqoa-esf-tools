@@ -52,7 +52,10 @@ func (m *Interp) Reset() {
 	m.pc = 0
 	m.hi = 0
 	m.lo = 0
-	m.writes = make(map[uint32]byte, 4096)
+	// Preserve writes if pre-set (e.g., zeroFakePointers called before Run)
+	if m.writes == nil {
+		m.writes = make(map[uint32]byte, 4096)
+	}
 	m.Steps = 0
 	m.Intercepted = 0
 }
