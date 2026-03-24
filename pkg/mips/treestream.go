@@ -22,8 +22,9 @@ type ESFTreeStream struct {
 	current  *esf.ObjInfo // current object node
 	pos      int          // absolute read position in ESF data
 	stack    []treeFrame  // parent stack for ReadBegin/ReadEnd nesting
-	childIdx   map[*esf.ObjInfo]int // next child index per parent
-	rootOpened bool                 // true after first ReadBegin
+	childIdx       map[*esf.ObjInfo]int          // next child index per parent
+	visitedChildren map[*esf.ObjInfo]struct{}   // children already opened
+	rootOpened     bool                         // true after first ReadBegin
 
 	Reads []ReadEntry // captured trace
 }
@@ -64,9 +65,29 @@ func (s *ESFTreeStream) ReadBegin() (typ uint16, ver uint16, size uint32) {
 		return
 	}
 
-	// Subsequent calls: find the next child of current node
-	idx := s.childIdx[s.current]
+	// Subsequent calls: find the next UNVISITED child of current node.
+	// PS2 sub-parsers call ReadBegin expecting a specific child type.
+	// We find children sequentially by advancing childIdx, but some
+	// children may be skipped (stubbed sub-parsers don't call ReadBegin).
+	// The PS2 ReadBegin reads the type code from the file position.
+	// We match by advancing through children until we find one that
+	// hasn't been visited yet.
+	// Find the next unvisited child. PS2 sub-parsers call ReadBegin expecting
+	// to get their specific child type. We search forward from childIdx to find
+	// the next child — this handles gaps where stubbed sub-parsers skipped
+	// their children.
 	children := s.current.Children
+	idx := s.childIdx[s.current]
+
+	// Advance past any already-visited children
+	for idx < len(children) {
+		// Check if this child was already visited by a previous ReadBegin
+		if _, visited := s.visitedChildren[children[idx]]; !visited {
+			break
+		}
+		idx++
+	}
+
 	if idx >= len(children) {
 		// No more children — read from stream as raw data (fallback)
 		if s.pos+8 <= len(s.data) {
@@ -85,6 +106,10 @@ func (s *ESFTreeStream) ReadBegin() (typ uint16, ver uint16, size uint32) {
 
 	child := children[idx]
 	s.childIdx[s.current] = idx + 1
+	if s.visitedChildren == nil {
+		s.visitedChildren = make(map[*esf.ObjInfo]struct{})
+	}
+	s.visitedChildren[child] = struct{}{}
 
 	// Push current state, descend into child
 	s.stack = append(s.stack, treeFrame{node: s.current, pos: s.pos})

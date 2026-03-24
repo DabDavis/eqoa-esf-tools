@@ -5,6 +5,24 @@ import "math"
 // ESF bridge: intercepts JAL calls to known VIObjFile Read* functions
 // and routes them through the ESFStream instead of executing MIPS code.
 
+// nativeSubParsers lists PS2 parser functions that should execute natively
+// (not be auto-stubbed). These are ESF child parsers that call ReadBegin/
+// ReadEnd and Read* to parse sub-objects. Adding a function here lets
+// the MIPS interpreter execute it fully, capturing all its reads.
+var nativeSubParsers = []uint32{
+	// CSprite sub-parsers that ONLY read data (no runtime object creation).
+	// These are safe to execute natively — they just do:
+	//   ReadBegin → count → N × fields → ReadEnd
+	0x00437B80, // ParseCSpritePlayList — count + N × (dictID+index+speed+playOnce+sounds)
+	0x00437E30, // ParseCSpriteNodeIDList — count + N × (nodeIndex+boneIndex)
+	0x00437F18, // ParseCSpriteASlotList — count + N × (attachSlot+boneIndex)
+	0x00437FF8, // ParseCSpriteTSlotList — count + N × (meshIndex+slotID+flag)
+	0x00438100, // ParseCSpriteContSound — dictID + volume
+	0x00437A78, // ParseCSpriteSkinList — count + N × (dictID+skinIndex)
+	0x00436248, // ParseHSpriteTriggers — count + N × refID
+	0x004372D8, // ParseRefMap — dictID + count + N × (refID+boneIndex)
+}
+
 // Known Read* function addresses (from SUPPORT symbol map)
 var readFuncs = map[uint32]string{
 	0x003EB0A8: "ReadBegin",
@@ -111,6 +129,16 @@ func (m *Interp) handleJAL(target uint32) bool {
 		m.wReg32(2, 0) // return 0 = found
 		m.Intercepted++
 		return true
+	}
+
+	// Whitelist: sub-parsers that should execute natively (NOT be stubbed).
+	// These are ESF child parsers called by tree-navigating parsers like
+	// ParseCSpriteObj. They call ReadBegin/ReadEnd and Read* functions
+	// which are routed through our ESFTreeStream.
+	for _, addr := range nativeSubParsers {
+		if target == addr {
+			return false // execute natively, don't stub
+		}
 	}
 
 	// Auto-stub: ANY function in known code ranges.
