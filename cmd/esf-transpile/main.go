@@ -823,7 +823,37 @@ func PS2Parse%s(file *ObjFile, node *ObjInfo) error {
 
 `, name, typ))
 
-	// Generate code for each ReadBegin block
+	// Collect root-level data reads (between first ReadBegin and first child ReadBegin)
+	// These are reads from the node's own data, not from children.
+	var rootReads []mips.ReadEntry
+	pastFirstBegin := false
+	for _, r := range trace {
+		if r.Type == "ReadBegin" {
+			if !pastFirstBegin {
+				pastFirstBegin = true
+				continue
+			}
+			break // hit a child ReadBegin, stop collecting root reads
+		}
+		if r.Type == "ReadEnd" {
+			break // root closed before any children
+		}
+		if pastFirstBegin && r.Type != "ReadEnd" {
+			rootReads = append(rootReads, r)
+		}
+	}
+
+	// Emit root-level data reads (for leaf nodes like HSpriteAnim)
+	if len(rootReads) > 0 {
+		sb.WriteString(fmt.Sprintf("\t// %d root-level data reads (leaf node, no children)\n", len(rootReads)))
+		sb.WriteString(fmt.Sprintf("\tdata := file.RawBytes(int(node.Offset), int(node.Size))\n"))
+		sb.WriteString("\tpos := 0\n\n")
+
+		// Detect repeating patterns for loop generation
+		emitFlatReads(&sb, rootReads, name, "\t")
+	}
+
+	// Generate code for each ReadBegin block (child navigation)
 	childIdx := 0
 	for _, r := range trace {
 		if r.Type != "ReadBegin" {
@@ -936,6 +966,142 @@ var _ = binary.LittleEndian
 `)
 
 	return sb.String()
+}
+
+// emitFlatReads generates Go code from a flat sequence of reads.
+// Detects header fields, then finds repeating patterns for loop generation.
+func emitFlatReads(sb *strings.Builder, reads []mips.ReadEntry, name, indent string) {
+	if len(reads) == 0 {
+		return
+	}
+
+	// Try to detect a repeating pattern (per-node/per-vertex)
+	// Look for the first repeat of length 3-100
+	headerLen := 0
+	var pattern []mips.ReadEntry
+	patternCount := 0
+
+	for tryHeader := 1; tryHeader < len(reads) && tryHeader < 20; tryHeader++ {
+		for stride := 3; stride <= 100 && tryHeader+stride*3 <= len(reads); stride++ {
+			after := reads[tryHeader:]
+			candidate := after[:stride]
+			matches := 1
+			for j := stride; j+stride <= len(after); j += stride {
+				same := true
+				for k := 0; k < stride; k++ {
+					if after[j+k].Type != candidate[k].Type {
+						same = false
+						break
+					}
+				}
+				if !same {
+					break
+				}
+				matches++
+			}
+			if matches >= 3 {
+				headerLen = tryHeader
+				pattern = candidate
+				patternCount = matches
+				goto found
+			}
+		}
+	}
+
+found:
+	// Emit header reads
+	for i := 0; i < headerLen && i < len(reads); i++ {
+		r := reads[i]
+		fname := fmt.Sprintf("h%d", i)
+		switch r.Type {
+		case "uint32":
+			sb.WriteString(fmt.Sprintf("%s%s := ps2ru32(data, &pos)\n", indent, fname))
+		case "int32":
+			sb.WriteString(fmt.Sprintf("%s%s := ps2ri32(data, &pos)\n", indent, fname))
+		case "float32":
+			sb.WriteString(fmt.Sprintf("%s%s := ps2rf32(data, &pos)\n", indent, fname))
+		case "int16":
+			sb.WriteString(fmt.Sprintf("%s%s := ps2ri16(data, &pos)\n", indent, fname))
+		default:
+			sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+		}
+	}
+
+	// Suppress unused header vars
+	for i := 0; i < headerLen; i++ {
+		sb.WriteString(fmt.Sprintf("%s_ = h%d\n", indent, i))
+	}
+
+	if pattern != nil && patternCount >= 3 {
+		// Calculate how many iterations
+		totalAfterHeader := len(reads) - headerLen
+		iterations := totalAfterHeader / len(pattern)
+
+		sb.WriteString(fmt.Sprintf("\n%s// Repeating pattern: %d reads × %d iterations\n",
+			indent, len(pattern), iterations))
+		sb.WriteString(fmt.Sprintf("%sfor i := 0; i < %d; i++ {\n", indent, iterations))
+
+		// Emit pattern reads
+		for j, r := range pattern {
+			fname := fmt.Sprintf("v%d", j)
+			switch r.Type {
+			case "uint32":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2ru32(data, &pos)\n", indent, fname))
+			case "int32":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2ri32(data, &pos)\n", indent, fname))
+			case "float32":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2rf32(data, &pos)\n", indent, fname))
+			case "int16":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2ri16(data, &pos)\n", indent, fname))
+			case "uint8":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2ru8(data, &pos)\n", indent, fname))
+			case "int8":
+				sb.WriteString(fmt.Sprintf("%s\t%s := ps2ri8(data, &pos)\n", indent, fname))
+			default:
+				sb.WriteString(fmt.Sprintf("%s\t_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+			}
+		}
+		// Suppress unused
+		for j := range pattern {
+			sb.WriteString(fmt.Sprintf("%s\t_ = v%d\n", indent, j))
+		}
+		sb.WriteString(fmt.Sprintf("%s}\n", indent))
+
+		// Handle remaining reads after the pattern
+		remaining := totalAfterHeader - iterations*len(pattern)
+		if remaining > 0 {
+			sb.WriteString(fmt.Sprintf("\n%s// %d trailing reads after loop\n", indent, remaining))
+			startIdx := headerLen + iterations*len(pattern)
+			for i := 0; i < remaining && startIdx+i < len(reads); i++ {
+				r := reads[startIdx+i]
+				switch r.Type {
+				case "int32":
+					sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos)\n", indent))
+				case "float32":
+					sb.WriteString(fmt.Sprintf("%s_ = ps2rf32(data, &pos)\n", indent))
+				default:
+					sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+				}
+			}
+		}
+	} else if headerLen < len(reads) {
+		// No pattern found — emit all remaining reads individually
+		sb.WriteString(fmt.Sprintf("\n%s// %d data reads (no repeating pattern detected)\n",
+			indent, len(reads)-headerLen))
+		for i := headerLen; i < len(reads); i++ {
+			r := reads[i]
+			switch r.Type {
+			case "int32":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos)\n", indent))
+			case "float32":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2rf32(data, &pos)\n", indent))
+			case "int16":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri16(data, &pos)\n", indent))
+			default:
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+			}
+		}
+	}
 }
 
 func typeName(t uint16) string {
