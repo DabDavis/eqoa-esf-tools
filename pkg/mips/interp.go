@@ -197,12 +197,14 @@ func (m *Interp) exec(insn uint32) bool {
 	case 3: // JAL
 		callTarget := (m.pc & 0xF0000000) | (target << 2)
 		m.wReg(31, int64(next+4))
+		// PCSX2 doBranch: delay slot executes BEFORE the target function.
+		// Critical for cases like: jal Read_Ri / lw $fp, 280($sp)
+		// where the delay slot must read the OLD value at sp+280.
 		delayInsn := m.load32(next)
+		m.exec(delayInsn) // delay slot first (matches PCSX2 _doBranch_shared)
 		if m.handleJAL(callTarget) {
-			m.exec(delayInsn)
 			m.pc = next + 4
 		} else {
-			m.exec(delayInsn)
 			m.pc = callTarget
 		}
 		return true
@@ -441,11 +443,10 @@ func (m *Interp) execSpecial(rs, rt, rd, sa int, funct uint32, next uint32) bool
 		target := uint32(m.rReg(rs))
 		m.wReg(rd, int64(next+4))
 		delayInsn := m.load32(next)
+		m.exec(delayInsn) // delay slot first (PCSX2 convention)
 		if m.handleJAL(target) {
-			m.exec(delayInsn)
 			m.pc = next + 4
 		} else {
-			m.exec(delayInsn)
 			m.pc = target
 		}
 		return true
