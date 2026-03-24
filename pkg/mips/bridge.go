@@ -31,6 +31,17 @@ var mathFuncs = map[uint32]string{
 // handleJAL intercepts JAL calls. Returns true if the call was handled
 // (caller should skip to return address), false to execute normally.
 func (m *Interp) handleJAL(target uint32) bool {
+	// Call trace (PCSX2 DebugInterface style)
+	if m.callTraceEnabled {
+		name := ""
+		if n, ok := readFuncs[target]; ok {
+			name = n
+		}
+		m.callTrace = append(m.callTrace, CallEntry{
+			Target: target, Caller: m.pc, Name: name,
+		})
+	}
+
 	if name, ok := readFuncs[target]; ok {
 		m.handleRead(name)
 		m.Intercepted++

@@ -16,6 +16,7 @@ type Interp struct {
 	fregs    [32]float32
 	pc       uint32
 	hi, lo   int64
+	fpCC     bool                    // FPU condition code (PCSX2: fpuRegs.fprc[31] bit 23)
 	writes   map[uint32]byte // sparse writable memory overlay
 	MaxSteps int
 	Verbose  bool
@@ -26,6 +27,12 @@ type Interp struct {
 	// Stats
 	Steps       int
 	Intercepted int
+
+	// Debug (ported from PCSX2 DebugTools)
+	breakpoints      []Breakpoint
+	memChecks        []*MemCheck
+	callTraceEnabled bool
+	callTrace        []CallEntry
 }
 
 // New creates an interpreter loaded with EE memory.
@@ -72,6 +79,10 @@ func (m *Interp) Run(entryAddr uint32, esf *ESFStream, args ...uint32) int32 {
 
 	for m.Steps < m.MaxSteps {
 		if m.pc == 0 {
+			break
+		}
+		// PCSX2-style breakpoint check (before instruction execution)
+		if len(m.breakpoints) > 0 && m.checkBreakpoints() {
 			break
 		}
 		insn := m.load32(m.pc)
@@ -142,18 +153,27 @@ func (m *Interp) load32(addr uint32) uint32 {
 
 func (m *Interp) store8(addr uint32, v byte) {
 	m.writes[addr] = v
+	if len(m.memChecks) > 0 {
+		m.checkMemWrite(addr, 1, uint32(v))
+	}
 }
 
 func (m *Interp) store16(addr uint32, v uint16) {
-	m.store8(addr, byte(v))
-	m.store8(addr+1, byte(v>>8))
+	m.writes[addr] = byte(v)
+	m.writes[addr+1] = byte(v >> 8)
+	if len(m.memChecks) > 0 {
+		m.checkMemWrite(addr, 2, uint32(v))
+	}
 }
 
 func (m *Interp) store32(addr uint32, v uint32) {
-	m.store8(addr, byte(v))
-	m.store8(addr+1, byte(v>>8))
-	m.store8(addr+2, byte(v>>16))
-	m.store8(addr+3, byte(v>>24))
+	m.writes[addr] = byte(v)
+	m.writes[addr+1] = byte(v >> 8)
+	m.writes[addr+2] = byte(v >> 16)
+	m.writes[addr+3] = byte(v >> 24)
+	if len(m.memChecks) > 0 {
+		m.checkMemWrite(addr, 4, v)
+	}
 }
 
 func (m *Interp) loadFloat(addr uint32) float32 {
@@ -371,12 +391,24 @@ func (m *Interp) exec(insn uint32) bool {
 		return true
 
 	// R5900 SQ/LQ (128-bit → treat as 32-bit for register save/restore)
-	case 0x1F: // SQ
-		m.store32(uint32(m.rReg32(rs)+simm), uint32(m.rReg(rt)))
+	case 0x1F: // SQ (128-bit store, PCSX2: memWrite128, addr aligned to 16)
+		// PS2 R5900: stores full 128-bit register. We store low 64 bits (sufficient
+		// for C code register save/restore which only uses the low 32-64 bits).
+		addr := uint32(m.rReg32(rs)+simm) & ^uint32(0xF) // PCSX2: addr & ~0xf
+		v := m.rReg(rt)
+		m.store32(addr, uint32(v))
+		m.store32(addr+4, uint32(v>>32))
+		// Upper 64 bits (quadword) zeroed — R5900 stores all 128 but parsers
+		// only use low 64. PCSX2 stores cpuRegs.GPR.r[rt].UQ (full 128).
+		m.store32(addr+8, 0)
+		m.store32(addr+12, 0)
 		m.pc = next
 		return true
-	case 0x1E: // LQ
-		m.wReg32(rt, int64(int32(m.load32(uint32(m.rReg32(rs)+simm)))))
+	case 0x1E: // LQ (128-bit load, PCSX2: memRead128, addr aligned to 16)
+		addr := uint32(m.rReg32(rs)+simm) & ^uint32(0xF) // PCSX2: addr & ~0xf
+		lo := int64(m.load32(addr))
+		hi := int64(m.load32(addr + 4))
+		m.wReg(rt, lo|(hi<<32))
 		m.pc = next
 		return true
 
@@ -396,21 +428,49 @@ func (m *Interp) exec(insn uint32) bool {
 		m.pc = next
 		return true
 
-	// LWL/LWR, SWL/SWR (unaligned — simplified)
+	// LWL/LWR (unaligned load — from PCSX2 R5900OpcodeImpl.cpp)
 	case 34: // LWL
 		addr := uint32(m.rReg32(rs) + simm)
-		m.wReg32(rt, int64(int32(m.load32(addr&^3))))
+		shift := addr & 3
+		mem := m.load32(addr & ^uint32(3))
+		// PCSX2: LWL_MASK = {0xffffff, 0xffff, 0xff, 0}, LWL_SHIFT = {24, 16, 8, 0}
+		lwlMask := [4]uint32{0x00FFFFFF, 0x0000FFFF, 0x000000FF, 0x00000000}
+		lwlShift := [4]uint32{24, 16, 8, 0}
+		result := (uint32(m.rReg(rt)) & lwlMask[shift]) | (mem << lwlShift[shift])
+		m.wReg32(rt, int64(int32(result)))
 		m.pc = next
 		return true
 	case 38: // LWR
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 3
+		mem := m.load32(addr & ^uint32(3))
+		// PCSX2: LWR_MASK = {0, 0xff000000, 0xffff0000, 0xffffff00}, LWR_SHIFT = {0, 8, 16, 24}
+		lwrMask := [4]uint32{0x00000000, 0xFF000000, 0xFFFF0000, 0xFFFFFF00}
+		lwrShift := [4]uint32{0, 8, 16, 24}
+		result := (uint32(m.rReg(rt)) & lwrMask[shift]) | (mem >> lwrShift[shift])
+		m.wReg32(rt, int64(int32(result)))
 		m.pc = next
 		return true
+
+	// SWL/SWR (unaligned store — from PCSX2)
 	case 42: // SWL
 		addr := uint32(m.rReg32(rs) + simm)
-		m.store32(addr&^3, uint32(m.rReg(rt)))
+		shift := addr & 3
+		mem := m.load32(addr & ^uint32(3))
+		swlMask := [4]uint32{0xFFFFFF00, 0xFFFF0000, 0xFF000000, 0x00000000}
+		swlShift := [4]uint32{24, 16, 8, 0}
+		result := (mem & swlMask[shift]) | (uint32(m.rReg(rt)) >> swlShift[shift])
+		m.store32(addr&^uint32(3), result)
 		m.pc = next
 		return true
 	case 46: // SWR
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 3
+		mem := m.load32(addr & ^uint32(3))
+		swrMask := [4]uint32{0x00000000, 0x000000FF, 0x0000FFFF, 0x00FFFFFF}
+		swrShift := [4]uint32{0, 8, 16, 24}
+		result := (mem & swrMask[shift]) | (uint32(m.rReg(rt)) << swrShift[shift])
+		m.store32(addr&^uint32(3), result)
 		m.pc = next
 		return true
 	}
@@ -553,9 +613,21 @@ func (m *Interp) execCOP1(insn uint32, rs, rt, rd, sa int, funct uint32, next ui
 		m.fregs[rd] = math.Float32frombits(uint32(m.rReg(rt)))
 		m.pc = next
 		return true
-	case 8: // BC1F/BC1T — simplified: don't branch
-		m.execDelay(next)
-		m.pc = next + 4
+	case 8: // BC1F/BC1T (PCSX2: checks fpuRegs.fprc[31] bit 23)
+		cc := rt & 1 // 0=BC1F (branch if !CC), 1=BC1T (branch if CC)
+		taken := false
+		if cc == 0 {
+			taken = !m.fpCC // BC1F: branch if condition false
+		} else {
+			taken = m.fpCC // BC1T: branch if condition true
+		}
+		if taken {
+			m.execDelay(next)
+			m.pc = uint32(int64(next) + (int64(int16(insn&0xFFFF)) << 2))
+		} else {
+			m.execDelay(next)
+			m.pc = next + 4
+		}
 		return true
 	case 16: // FPU single ops
 		fd := sa
@@ -582,6 +654,14 @@ func (m *Interp) execCOP1(insn uint32, rs, rt, rd, sa int, funct uint32, next ui
 		case 36: // CVT.W.S (float → int bits)
 			ival := int32(m.fregs[fs])
 			m.fregs[fd] = math.Float32frombits(uint32(ival))
+		case 48: // C.F.S (always false)
+			m.fpCC = false
+		case 50: // C.EQ.S
+			m.fpCC = m.fregs[fs] == m.fregs[ft]
+		case 52: // C.LT.S
+			m.fpCC = m.fregs[fs] < m.fregs[ft]
+		case 54: // C.LE.S
+			m.fpCC = m.fregs[fs] <= m.fregs[ft]
 		default:
 			// Unknown FPU op — skip
 		}
