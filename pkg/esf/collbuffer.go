@@ -55,11 +55,9 @@ func (cb *CollBuffer) Load(file *ObjFile) error {
 
 	p := float32(1.0 / math.Pow(2, float64(packing)))
 
-	// Resolve preTranslations if parent is SimpleSubSprite
-	var preTranslations []Point
-	if cb.info.Parent != nil && cb.info.Parent.Type == TypeSimpleSubSprite {
-		preTranslations = cb.resolvePreTranslations(file)
-	}
+	// PS2 ParseCollBuffer does NOT apply preTranslations for any cbtype.
+	// (Verified from decompilation at 0x00434610 — no preTranslation reference
+	// in live code paths for types 0, 1, 2, or 3.)
 
 	for i := int32(0); i < numVertexGroups; i++ {
 		num := file.readInt32()
@@ -107,28 +105,18 @@ func (cb *CollBuffer) Load(file *ObjFile) error {
 			// PS2: 3 × ReadInt16 + ReadInt16(vertex group byte) per vertex.
 			// PS2 reads 4 int16 values (8 bytes) but truncates the 4th to a
 			// signed byte for the vertex group index.
+			// PS2 does NOT apply preTranslation for cbtype 2 (verified from decompilation
+			// at loc_00434718/loc_004347B0 — no preTranslation reference).
 			for j := int32(0); j < num; j++ {
 				x := file.readInt16()
 				y := file.readInt16()
 				z := file.readInt16()
 				vgroup := int(int8(file.readInt16()))
 
-				vx := float32(x) * p
-				vy := float32(y) * p
-				vz := float32(z) * p
-
-				if preTranslations != nil {
-					if vgroup >= 0 && vgroup < len(preTranslations) {
-						vx += preTranslations[vgroup].X
-						vy += preTranslations[vgroup].Y
-						vz += preTranslations[vgroup].Z
-					}
-				}
-
 				vl.Vertices = append(vl.Vertices, CollVertex{
-					X:           vx,
-					Y:           vy,
-					Z:           vz,
+					X:           float32(x) * p,
+					Y:           float32(y) * p,
+					Z:           float32(z) * p,
 					VertexGroup: vgroup,
 					FloraType:   -1,
 				})
@@ -137,6 +125,8 @@ func (cb *CollBuffer) Load(file *ObjFile) error {
 		case 3:
 			// PS2: 3 × ReadInt16 + ReadSChar(vgroup) + ReadSChar(flora).
 			// PS2 uses Read__9VIObjFileRSc (signed char) for both fields.
+			// PS2 does NOT apply preTranslation for cbtype 3 (verified from decompilation
+			// at loc_00434978 — no preTranslation reference).
 			for j := int32(0); j < num; j++ {
 				x := file.readInt16()
 				y := file.readInt16()
@@ -144,22 +134,10 @@ func (cb *CollBuffer) Load(file *ObjFile) error {
 				vgroup := int(int8(file.readByte()))
 				flora := int(int8(file.readByte()))
 
-				vx := float32(x) * p
-				vy := float32(y) * p
-				vz := float32(z) * p
-
-				// Apply preTranslation offset if available.
-				// Negative vgroup (-1) means "no group" — skip translation.
-				if preTranslations != nil && vgroup >= 0 && vgroup < len(preTranslations) {
-					vx += preTranslations[vgroup].X
-					vy += preTranslations[vgroup].Y
-					vz += preTranslations[vgroup].Z
-				}
-
 				vl.Vertices = append(vl.Vertices, CollVertex{
-					X:           vx,
-					Y:           vy,
-					Z:           vz,
+					X:           float32(x) * p,
+					Y:           float32(y) * p,
+					Z:           float32(z) * p,
 					VertexGroup: vgroup,
 					FloraType:   flora,
 				})
