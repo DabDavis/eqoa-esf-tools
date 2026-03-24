@@ -105,23 +105,34 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
-	// All other known SUPPORT functions → stub (return 0)
-	if target >= 0x003E3D00 && target < 0x00559F14 {
-		m.wReg32(2, 0) // $v0 = 0
-		m.Intercepted++
-		return true
-	}
-
-	// SLUS code range
-	if target >= 0x00100000 && target < 0x00170000 {
-		m.wReg32(2, 0)
-		m.Intercepted++
-		return true
-	}
-
-	// CLIENT code range
-	if target >= 0x00CC7DA8 && target < 0x00D546A4 {
-		m.wReg32(2, 0)
+	// Auto-stub: ANY function in known code ranges.
+	// Smart return: peek at the instruction after the return (the caller's
+	// check) to decide what to return. Common patterns:
+	//   bltz $v0 → caller checks $v0 < 0 for error → return 0 (success)
+	//   beq $v0, $zero → caller checks $v0 == NULL → return fake pointer
+	// Default: return 0 (success for most functions).
+	//
+	// For functions that return pointers used as base addresses (PrimBuffer,
+	// Animation, etc.), specific intercepts above return fake pointers.
+	// Everything else gets 0 which passes bltz/error checks.
+	if (target >= 0x003E3D00 && target < 0x00559F14) ||
+		(target >= 0x00100000 && target < 0x00170000) ||
+		(target >= 0x00CC7DA8 && target < 0x00D546A4) {
+		// Check if the caller's next instruction after return treats $v0 as a pointer.
+		// If the return address loads from $v0 (lw $rX, offset($v0)), we need non-null.
+		ra := uint32(m.rReg(31))
+		if ra > 0 && ra < uint32(len(m.code))-4 {
+			nextInsn := m.load32(ra)
+			nextOp := (nextInsn >> 26) & 0x3F
+			nextRs := (nextInsn >> 21) & 0x1F
+			// If next instruction is lw/sw with $v0 as base register → pointer needed
+			if (nextOp == 35 || nextOp == 43) && nextRs == 2 { // LW/SW with rs=$v0
+				m.wReg32(2, int64(0x01F60000)) // fake pointer
+				m.Intercepted++
+				return true
+			}
+		}
+		m.wReg32(2, 0) // default: return 0 (success)
 		m.Intercepted++
 		return true
 	}
