@@ -1,0 +1,211 @@
+package mips
+
+import "math"
+
+// ESF bridge: intercepts JAL calls to known VIObjFile Read* functions
+// and routes them through the ESFStream instead of executing MIPS code.
+
+// Known Read* function addresses (from SUPPORT symbol map)
+var readFuncs = map[uint32]string{
+	0x003EB0A8: "ReadBegin",
+	0x003EB0C8: "ReadBegin2",
+	0x003EB3C8: "ReadEnd",
+	0x003EA350: "ObjectVersion",
+	0x003EB6E8: "Read_Ri",
+	0x003EB780: "Read_RUi",
+	0x003EB948: "Read_Rf",
+	0x003EB5B8: "Read_Rs",
+	0x003EB550: "Read_RUc",
+	0x003EB4E8: "Read_RSc",
+	0x003EB480: "Read_Rc",
+	0x003EB650: "Read_RUs",
+	0x003EB818: "Read_Rl",
+	0x003EBA78: "Read_PUci",
+}
+
+// Well-known math functions to intercept
+var mathFuncs = map[uint32]string{
+	// powf is critical for packing scale computation
+}
+
+// handleJAL intercepts JAL calls. Returns true if the call was handled
+// (caller should skip to return address), false to execute normally.
+func (m *Interp) handleJAL(target uint32) bool {
+	if name, ok := readFuncs[target]; ok {
+		m.handleRead(name)
+		m.Intercepted++
+		return true
+	}
+
+	// powf interception — PS2 uses this for packing scale
+	// powf is called via jalr, not jal, but also check here
+	// Symbol: powf at various addresses
+
+	// powf — critical for packing scale: pow(2.0, exponent)
+	if target == 0x00127328 {
+		base := m.fregs[12] // $f12 = first float arg
+		exp := m.fregs[13]  // $f13 = second float arg (from $f14 on PS2, but decompiler maps to 13)
+		result := float32(math.Pow(float64(base), float64(exp)))
+		m.fregs[0] = result // $f0 = return value
+		m.Intercepted++
+		return true
+	}
+
+	// All other known SUPPORT functions → stub (return 0)
+	if target >= 0x003E3D00 && target < 0x00559F14 {
+		m.wReg32(2, 0) // $v0 = 0
+		m.Intercepted++
+		return true
+	}
+
+	// SLUS code range
+	if target >= 0x00100000 && target < 0x00170000 {
+		m.wReg32(2, 0)
+		m.Intercepted++
+		return true
+	}
+
+	// CLIENT code range
+	if target >= 0x00CC7DA8 && target < 0x00D546A4 {
+		m.wReg32(2, 0)
+		m.Intercepted++
+		return true
+	}
+
+	return false
+}
+
+func (m *Interp) handleRead(name string) {
+	if m.ESF == nil {
+		m.wReg32(2, -1)
+		return
+	}
+
+	switch name {
+	case "ReadBegin":
+		typ, ver, _ := m.ESF.ReadBegin()
+		// $a1 = type dest, $a2 = ver dest
+		a1 := uint32(m.rReg(5))
+		a2 := uint32(m.rReg(6))
+		m.store16(a1, typ)
+		m.store16(a2, ver)
+		if typ > 0 {
+			m.wReg32(2, 0)
+		} else {
+			m.wReg32(2, -1)
+		}
+
+	case "ReadBegin2":
+		typ, ver, size := m.ESF.ReadBegin()
+		a1 := uint32(m.rReg(5))
+		a2 := uint32(m.rReg(6))
+		a3 := uint32(m.rReg(7))
+		t0 := uint32(m.rReg(8))
+		m.store16(a1, typ)
+		m.store16(a2, ver)
+		if a3 != 0 {
+			m.store32(a3, size)
+		}
+		if t0 != 0 {
+			m.store32(t0, 0)
+		}
+		if typ > 0 {
+			m.wReg32(2, 0)
+		} else {
+			m.wReg32(2, -1)
+		}
+
+	case "ReadEnd":
+		m.ESF.ReadEnd()
+		m.wReg32(2, 0)
+
+	case "ObjectVersion":
+		m.wReg32(2, int64(m.ESF.ObjectVersion()))
+
+	case "Read_Ri":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadInt32()
+		m.store32(a1, uint32(v))
+		m.wReg32(2, 0)
+
+	case "Read_RUi":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadUint32()
+		m.store32(a1, v)
+		m.wReg32(2, 0)
+
+	case "Read_Rf":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadFloat32()
+		m.storeFloat(a1, v)
+		m.wReg32(2, 0)
+
+	case "Read_Rs":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadInt16()
+		m.store16(a1, uint16(v))
+		m.wReg32(2, 0)
+
+	case "Read_RUc":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadUint8()
+		m.store8(a1, v)
+		m.wReg32(2, 0)
+
+	case "Read_RSc":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadInt8()
+		m.store8(a1, byte(v))
+		m.wReg32(2, 0)
+
+	case "Read_Rc":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadUint8()
+		m.store8(a1, v)
+		m.wReg32(2, 0)
+
+	case "Read_RUs":
+		a1 := uint32(m.rReg(5))
+		v := m.ESF.ReadInt16()
+		m.store16(a1, uint16(v))
+		m.wReg32(2, 0)
+
+	case "Read_Rl":
+		a1 := uint32(m.rReg(5))
+		lo := m.ESF.ReadInt32()
+		hi := m.ESF.ReadInt32()
+		m.store32(a1, uint32(lo))
+		m.store32(a1+4, uint32(hi))
+		m.wReg32(2, 0)
+
+	case "Read_PUci":
+		// Bulk read: $a1=dest, $a2=count
+		a1 := uint32(m.rReg(5))
+		count := int(m.rReg(6) & 0xFFFFFFFF)
+		data := m.ESF.ReadBytes(count)
+		for i, b := range data {
+			m.store8(a1+uint32(i), b)
+		}
+		m.wReg32(2, 0)
+
+	default:
+		m.wReg32(2, 0)
+	}
+}
+
+// RunParser sets up a VIESFParse context and runs a parser function.
+// Returns the read trace from the ESF stream.
+func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
+	interp := New(eeDump)
+	esf := NewESFStream(objData)
+
+	// Set up VIESFParse context struct
+	thisAddr := uint32(0x01FE0000)
+	for i := uint32(0); i < 512; i++ {
+		interp.Store8At(thisAddr+i, 0)
+	}
+	interp.Store32At(thisAddr+0x24, 0x01FD0000) // objFile ptr (non-null)
+
+	result := interp.Run(parserAddr, esf, thisAddr)
+	return result, esf.Reads
+}
