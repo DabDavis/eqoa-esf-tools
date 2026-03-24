@@ -51,6 +51,20 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
+	// VIRaster::CreatePrimBuffer — return a valid fake index (0, success)
+	if target == 0x00403220 {
+		m.wReg32(2, 0) // return index 0
+		m.Intercepted++
+		return true
+	}
+	// VIRaster::PrimBuffer — return a fake PrimBuffer pointer (non-null)
+	// The parser stores this in $s1 and uses it as base for Init/Lock/SetPacking/Vertex calls.
+	if target == 0x004032A0 {
+		m.wReg32(2, int64(0x01F80000)) // fake PrimBuffer at 0x01F80000
+		m.Intercepted++
+		return true
+	}
+
 	// VIDictionary::Find — return "not found" (non-zero) so parsers skip
 	// dictionary registration and go straight to object creation.
 	// PS2 parsers check: if (Find() == 0) { check type == 11; } else { CreatePrimBuffer(); }
@@ -214,7 +228,8 @@ func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadE
 	for i := uint32(0); i < 512; i++ {
 		interp.Store8At(thisAddr+i, 0)
 	}
-	interp.Store32At(thisAddr+0x04, 0x01FC0000) // VIScene* (non-null stub)
+	// Note: thisAddr+0x04 is a callback pointer, NOT VIScene. Must be NULL
+	// to skip the jalr dispatch in BeginMaterial/EndMaterial material change callbacks.
 	interp.Store32At(thisAddr+0x0C, 0x01FB0000) // VIRaster* (non-null — CreatePrimBuffer needs this)
 	interp.Store32At(thisAddr+0x18, 0x01FA0000) // VIParticleSystem* (non-null stub)
 	interp.Store32At(thisAddr+0x20, 0x01F90000) // VIDictionary* (non-null stub)
