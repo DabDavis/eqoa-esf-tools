@@ -1,8 +1,8 @@
 output.mtl
 output.obj
 output_tex/
-esf-verify
-esf-transpile
+/esf-verify
+/esf-transpile
 checkcsprite
 cmd/checkanimformat/
 cmd/checkcsprite/
