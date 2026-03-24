@@ -1,14 +1,10 @@
 // esf-transpile generates Go ESF parser code from PS2 MIPS read traces.
-//
-// Runs the PS2 parser natively via MIPS interpreter on real ESF data,
-// captures the exact read sequence, and emits Go code that performs
-// the same reads. The generated code is provably correct because it
-// matches PS2 byte-for-byte.
+// Runs PS2 parsers natively, captures exact read sequences for every
+// version/pbtype variant, and emits Go with proper if/switch dispatch.
 //
 // Usage:
 //
-//	esf-transpile --type 0x1200 --esf TUNARIA_chunk.bin --out gen_primbuffer.go
-//	esf-transpile --type 0x4200 --esf TUNARIA_chunk.bin --out gen_collbuffer.go
+//	esf-transpile --type 0x1200 TUNARIA_chunk.bin LAVASTM.ESF SKY.ESF
 package main
 
 import (
@@ -16,47 +12,48 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/DabDavis/eqoa-esf-tools/pkg/mips"
 )
 
-// parserInfo maps ESF type to PS2 parser address and name.
 var parserInfo = map[uint16]struct {
 	addr uint32
 	name string
 }{
 	0x1200: {0x004320B8, "PrimBuffer"},
-	0x1210: {0x00432F98, "SkinPrimBuffer"},
 	0x4200: {0x004343D8, "CollBuffer"},
 }
 
-// traceGroup collects traces from multiple objects of the same type
-// to discover version-conditional fields.
-type traceGroup struct {
+// variant identifies a unique parse path (version + pbtype combination).
+type variant struct {
 	ver    uint16
-	traces [][]mips.ReadEntry
+	pbtype int32 // -1 for v0 (no pbtype field)
+}
+
+// variantTrace holds the read trace for one variant.
+type variantTrace struct {
+	variant
+	reads []mips.ReadEntry // data reads only (no ReadBegin/ReadEnd)
+	count int              // how many objects produced this trace
 }
 
 func main() {
-	typFlag := flag.String("type", "", "ESF type to transpile (hex, e.g. 0x1200)")
-	esfFlag := flag.String("esf", "", "ESF file or raw chunk to parse")
-	isoFlag := flag.String("iso", "/home/sdg/claude-eqoa/EverQuest - Online Adventures - Frontiers (USA).iso", "ISO file")
-	dumpFlag := flag.String("dump", "/home/sdg/claude-eqoa/memory-dumps/go-inspect2.eeMemory", "EE dump")
-	maxFlag := flag.Int("max", 10, "Max objects to trace")
-	outFlag := flag.String("out", "", "Output .go file (stdout if empty)")
+	typFlag := flag.String("type", "", "ESF type (hex)")
+	isoFlag := flag.String("iso", "/home/sdg/claude-eqoa/EverQuest - Online Adventures - Frontiers (USA).iso", "")
+	dumpFlag := flag.String("dump", "/home/sdg/claude-eqoa/memory-dumps/go-inspect2.eeMemory", "")
+	maxFlag := flag.Int("max", 10, "Max objects per file")
+	outFlag := flag.String("out", "", "Output file (stdout if empty)")
 	flag.Parse()
 
 	if *typFlag == "" {
-		fmt.Fprintf(os.Stderr, "Usage: esf-transpile --type 0x1200 [--esf file] [--out file.go]\n")
+		fmt.Fprintf(os.Stderr, "Usage: esf-transpile --type 0x1200 [files...]\n")
 		os.Exit(1)
 	}
 
 	var targetType uint16
 	fmt.Sscanf(*typFlag, "0x%x", &targetType)
-	if targetType == 0 {
-		fmt.Sscanf(*typFlag, "%x", &targetType)
-	}
 
 	info, ok := parserInfo[targetType]
 	if !ok {
@@ -64,7 +61,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load EE dump
 	fmt.Fprintf(os.Stderr, "Loading EE dump...\n")
 	eeDump, err := os.ReadFile(*dumpFlag)
 	if err != nil {
@@ -72,77 +68,111 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load ESF data
-	var esfData []byte
-	if *esfFlag != "" {
-		esfData, err = os.ReadFile(*esfFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ESF: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		// Read from TUNARIA in ISO
-		fmt.Fprintf(os.Stderr, "Reading from ISO TUNARIA...\n")
-		f, err := os.Open(*isoFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ISO: %v\n", err)
-			os.Exit(1)
-		}
-		defer f.Close()
-		esfData = make([]byte, 50*1024*1024)
-		f.ReadAt(esfData, 520000*2048)
+	// Collect ESF data from all sources
+	var allData []struct {
+		name string
+		data []byte
 	}
 
-	// Find objects of the target type
-	offsets := scanType(esfData, targetType, *maxFlag)
-	fmt.Fprintf(os.Stderr, "Found %d objects of type 0x%04X\n", len(offsets), targetType)
-
-	if len(offsets) == 0 {
-		fmt.Fprintf(os.Stderr, "No objects found\n")
-		os.Exit(1)
-	}
-
-	// Collect traces grouped by version
-	groups := map[uint16]*traceGroup{}
-	for _, off := range offsets {
-		ver := binary.LittleEndian.Uint16(esfData[off+2:])
-		size := binary.LittleEndian.Uint32(esfData[off+4:])
-		objData := esfData[off : off+8+int(size)]
-
-		result, reads := mips.RunParser(eeDump, info.addr, objData)
-		if result < 0 {
-			fmt.Fprintf(os.Stderr, "  @0x%06X ver=%d → error (skipped)\n", off, ver)
+	// Explicit files from args
+	for _, path := range flag.Args() {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 			continue
 		}
-
-		// Filter to data reads only
-		var dataReads []mips.ReadEntry
-		for _, r := range reads {
-			if r.Type != "ReadBegin" && r.Type != "ReadEnd" {
-				dataReads = append(dataReads, r)
-			}
-		}
-
-		fmt.Fprintf(os.Stderr, "  @0x%06X ver=%d → %d reads\n", off, ver, len(dataReads))
-
-		g, ok := groups[ver]
-		if !ok {
-			g = &traceGroup{ver: ver}
-			groups[ver] = g
-		}
-		g.traces = append(g.traces, dataReads)
+		allData = append(allData, struct {
+			name string
+			data []byte
+		}{path, data})
 	}
 
-	// Generate Go code from traces
-	code := generateGo(info.name, targetType, groups)
+	// Also read from TUNARIA in ISO if no args
+	if len(allData) == 0 {
+		fmt.Fprintf(os.Stderr, "Reading TUNARIA from ISO...\n")
+		f, err := os.Open(*isoFlag)
+		if err == nil {
+			chunk := make([]byte, 50*1024*1024)
+			f.ReadAt(chunk, 520000*2048)
+			f.Close()
+			allData = append(allData, struct {
+				name string
+				data []byte
+			}{"TUNARIA", chunk})
+		}
+	}
+
+	// Scan all files for objects, trace each one
+	variants := map[variant]*variantTrace{}
+
+	for _, src := range allData {
+		offsets := scanType(src.data, targetType, *maxFlag)
+		fmt.Fprintf(os.Stderr, "%s: %d objects of type 0x%04X\n", src.name, len(offsets), targetType)
+
+		for _, off := range offsets {
+			ver := binary.LittleEndian.Uint16(src.data[off+2:])
+			size := binary.LittleEndian.Uint32(src.data[off+4:])
+			objData := src.data[off : off+8+int(size)]
+
+			result, reads := mips.RunParser(eeDump, info.addr, objData)
+			if result < 0 {
+				continue
+			}
+
+			// Extract pbtype from trace (3rd data read for ver>0, -1 for v0)
+			pbtype := int32(-1)
+			dataIdx := 0
+			for _, r := range reads {
+				if r.Type == "ReadBegin" || r.Type == "ReadEnd" {
+					continue
+				}
+				dataIdx++
+				// For PrimBuffer: read 1=dictID (if ver>1), then pbtype
+				if targetType == 0x1200 {
+					if ver > 1 && dataIdx == 2 {
+						pbtype = int32(r.IVal)
+					} else if ver <= 1 && dataIdx == 1 {
+						pbtype = int32(r.IVal)
+					}
+				}
+				if targetType == 0x4200 {
+					if ver > 1 && dataIdx == 1 {
+						pbtype = int32(r.IVal) // cbtype
+					}
+				}
+			}
+			if ver == 0 {
+				pbtype = -1
+			}
+
+			// Filter to data reads only
+			var dataReads []mips.ReadEntry
+			for _, r := range reads {
+				if r.Type != "ReadBegin" && r.Type != "ReadEnd" {
+					dataReads = append(dataReads, r)
+				}
+			}
+
+			v := variant{ver, pbtype}
+			vt, ok := variants[v]
+			if !ok {
+				vt = &variantTrace{variant: v, reads: dataReads}
+				variants[v] = vt
+			}
+			vt.count++
+
+			fmt.Fprintf(os.Stderr, "  ver=%d pb=%d → %d reads\n", ver, pbtype, len(dataReads))
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\n%d unique variants found\n", len(variants))
+
+	// Generate code
+	code := generateCode(info.name, targetType, variants)
 
 	if *outFlag != "" {
-		err := os.WriteFile(*outFlag, []byte(code), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Write: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Fprintf(os.Stderr, "Wrote %s (%d bytes)\n", *outFlag, len(code))
+		os.WriteFile(*outFlag, []byte(code), 0644)
+		fmt.Fprintf(os.Stderr, "Wrote %s\n", *outFlag)
 	} else {
 		fmt.Print(code)
 	}
@@ -158,25 +188,9 @@ func scanType(data []byte, typ uint16, maxCount int) []int {
 		}
 		ver := binary.LittleEndian.Uint16(data[i+2:])
 		size := binary.LittleEndian.Uint32(data[i+4:])
-		if ver > 20 && size > 0 && size < 500000 && i+8+int(size) <= len(data) {
+		if ver > 20 || size == 0 || size > 500000 || i+8+int(size) > len(data) {
+			i++
 			continue
-		}
-		if size == 0 || size > 500000 || i+8+int(size) > len(data) {
-			continue
-		}
-		// Validate pbtype for PrimBuffer
-		if typ == 0x1200 && ver > 0 {
-			doff := i + 8
-			if ver > 1 {
-				doff += 4
-			}
-			if doff+4 <= len(data) {
-				pb := int32(binary.LittleEndian.Uint32(data[doff:]))
-				if pb != 0 && pb != 2 && pb != 4 {
-					i++
-					continue
-				}
-			}
 		}
 		offsets = append(offsets, i)
 		i += 8 + int(size) - 1
@@ -184,16 +198,53 @@ func scanType(data []byte, typ uint16, maxCount int) []int {
 	return offsets
 }
 
-// generateGo creates Go source code from the collected traces.
-func generateGo(name string, typ uint16, groups map[uint16]*traceGroup) string {
+// detectVertexPattern analyzes the reads after header to find per-vertex repeat.
+func detectVertexPattern(reads []mips.ReadEntry, headerLen int) (vertexReads []mips.ReadEntry, vertexCount int) {
+	if headerLen+2 >= len(reads) {
+		return nil, 0
+	}
+
+	// After header: nverts(i32) + mat(i32) + vertex data
+	after := reads[headerLen+2:] // skip nverts + mat
+	if len(after) < 4 {
+		return nil, 0
+	}
+
+	// Try strides 12 (float: 8f+4b), 12 (packed: 5i16+3i8+4u8), 13 (packed+vgroup)
+	for _, stride := range []int{12, 13, 14, 10, 11} {
+		if stride > len(after) {
+			continue
+		}
+		pattern := after[:stride]
+		matches := 1
+		for j := stride; j+stride <= len(after); j += stride {
+			same := true
+			for k := 0; k < stride; k++ {
+				if after[j+k].Type != pattern[k].Type {
+					same = false
+					break
+				}
+			}
+			if !same {
+				break
+			}
+			matches++
+		}
+		if matches >= 2 {
+			return pattern, matches
+		}
+	}
+	return nil, 0
+}
+
+func generateCode(name string, typ uint16, variants map[variant]*variantTrace) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf(`// Code generated by esf-transpile from PS2 Parse%s at SUPPORT.
-// DO NOT EDIT — regenerate with: esf-transpile --type 0x%04X
+	sb.WriteString(fmt.Sprintf(`// Code generated by esf-transpile from PS2 Parse%s.
+// DO NOT EDIT — regenerate with: esf-transpile --type 0x%04X [esf-files...]
 //
-// This parser is byte-accurate against the PS2 binary.
-// Every read type and order matches the MIPS execution trace.
-
+// This parser is byte-accurate against the PS2 MIPS binary.
+// Every read type and order matches the native PS2 execution trace.
 package esf
 
 import (
@@ -202,95 +253,22 @@ import (
 	"math"
 )
 
-// PS2Parse%s parses a %s object using the exact PS2 read sequence.
-// Generated from MIPS interpreter traces of the PS2 parser.
-func PS2Parse%s(data []byte) ([]PS2Vertex, error) {
-	if len(data) < 8 {
-		return nil, fmt.Errorf("%s: too short")
+`, name, typ))
+
+	// Sort variants for deterministic output
+	var vkeys []variant
+	for v := range variants {
+		vkeys = append(vkeys, v)
 	}
-
-	typ := binary.LittleEndian.Uint16(data[0:])
-	ver := binary.LittleEndian.Uint16(data[2:])
-	_ = binary.LittleEndian.Uint32(data[4:]) // size
-
-	if typ != 0x%04X {
-		return nil, fmt.Errorf("%s: wrong type 0x%%04X", typ)
-	}
-
-	pos := 8
-	var vertices []PS2Vertex
-
-`, name, typ, name, name, name, name, typ, name))
-
-	// Analyze the most common trace to determine the read pattern
-	for ver, g := range groups {
-		if len(g.traces) == 0 {
-			continue
+	sort.Slice(vkeys, func(i, j int) bool {
+		if vkeys[i].ver != vkeys[j].ver {
+			return vkeys[i].ver < vkeys[j].ver
 		}
+		return vkeys[i].pbtype < vkeys[j].pbtype
+	})
 
-		// Use first trace as template
-		trace := g.traces[0]
-		sb.WriteString(fmt.Sprintf("\t// Version %d: %d data reads per object\n", ver, len(trace)))
-
-		if ver == 0 {
-			sb.WriteString("\tif ver == 0 {\n")
-			generateV0Reads(&sb, trace)
-			sb.WriteString("\t\treturn vertices, nil\n\t}\n\n")
-			continue
-		}
-
-		// Detect header pattern from trace
-		headerReads, vertexPattern := splitHeaderAndVertices(trace)
-
-		sb.WriteString(fmt.Sprintf("\t// Header: %d fields\n", len(headerReads)))
-
-		// Emit header reads
-		for i, r := range headerReads {
-			varName := fmt.Sprintf("h%d", i)
-			switch i {
-			case 0:
-				varName = "dictID"
-			case 1:
-				varName = "pbtype"
-			case 2:
-				varName = "nmats"
-			case 3:
-				varName = "nfaces"
-			case 4:
-				varName = "unk"
-			case 5:
-				varName = "p1"
-			case 6:
-				varName = "p2"
-			case 7:
-				varName = "p3"
-			}
-
-			emitRead(&sb, r, varName, "\t")
-		}
-
-		// Emit vertex loop
-		if len(vertexPattern) > 0 {
-			sb.WriteString("\n\t// Vertex loop\n")
-			sb.WriteString("\tfor fi := 0; fi < int(nfaces); fi++ {\n")
-			emitRead(&sb, mips.ReadEntry{Type: "int32"}, "nverts", "\t\t")
-			emitRead(&sb, mips.ReadEntry{Type: "int32"}, "mat", "\t\t")
-			sb.WriteString("\t\t_ = mat\n")
-			sb.WriteString("\t\tfor vi := 0; vi < int(nverts); vi++ {\n")
-
-			emitVertexReads(&sb, vertexPattern, "\t\t\t")
-
-			sb.WriteString("\t\t\tvertices = append(vertices, v)\n")
-			sb.WriteString("\t\t}\n")
-			sb.WriteString("\t}\n")
-		}
-	}
-
-	sb.WriteString(`
-	return vertices, nil
-}
-
-// PS2Vertex holds one vertex as parsed by the PS2.
+	// Emit PS2Vertex struct
+	sb.WriteString(`// PS2Vertex holds one vertex as parsed by the PS2 natively.
 type PS2Vertex struct {
 	X, Y, Z    float32
 	U, V       float32
@@ -298,164 +276,246 @@ type PS2Vertex struct {
 	R, G, B, A float32
 	VGroup     int16
 }
+
 `)
 
-	// Add helper
+	// Main function
+	sb.WriteString(fmt.Sprintf("// PS2Parse%s parses a %s using the exact PS2 read sequence.\n", name, name))
+	sb.WriteString(fmt.Sprintf("func PS2Parse%s(data []byte) ([]PS2Vertex, error) {\n", name))
+	sb.WriteString("\tif len(data) < 8 {\n\t\treturn nil, fmt.Errorf(\"too short\")\n\t}\n\n")
+	sb.WriteString("\ttyp := binary.LittleEndian.Uint16(data[0:])\n")
+	sb.WriteString(fmt.Sprintf("\tif typ != 0x%04X {\n\t\treturn nil, fmt.Errorf(\"wrong type 0x%%04X\", typ)\n\t}\n\n", typ))
+	sb.WriteString("\tver := binary.LittleEndian.Uint16(data[2:])\n")
+	sb.WriteString("\tpos := 8\n")
+	sb.WriteString("\tvar vertices []PS2Vertex\n\n")
+
+	// Group variants by version
+	verGroups := map[uint16][]variant{}
+	for _, v := range vkeys {
+		verGroups[v.ver] = append(verGroups[v.ver], v)
+	}
+
+	// Emit version dispatch
+	var vers []uint16
+	for v := range verGroups {
+		vers = append(vers, v)
+	}
+	sort.Slice(vers, func(i, j int) bool { return vers[i] < vers[j] })
+
+	for _, ver := range vers {
+		vGroup := verGroups[ver]
+		vt0 := variants[vGroup[0]]
+
+		if ver == 0 {
+			sb.WriteString("\tif ver == 0 {\n")
+			emitV0Body(&sb, vt0.reads)
+			sb.WriteString("\t\treturn vertices, nil\n\t}\n\n")
+			continue
+		}
+
+		sb.WriteString(fmt.Sprintf("\t// Version %d (%d objects traced)\n", ver, vt0.count))
+
+		// Header: common reads before pbtype dispatch
+		headerLen := emitHeader(&sb, vt0.reads, ver)
+
+		// If multiple pbtypes, emit switch
+		if len(vGroup) > 1 {
+			sb.WriteString("\n\tswitch pbtype {\n")
+			for _, v := range vGroup {
+				vt := variants[v]
+				sb.WriteString(fmt.Sprintf("\tcase %d: // %d objects traced\n", v.pbtype, vt.count))
+				emitVertexLoop(&sb, vt.reads, headerLen, "\t\t")
+			}
+			sb.WriteString("\tdefault:\n")
+			sb.WriteString(fmt.Sprintf("\t\treturn nil, fmt.Errorf(\"%s: unsupported pbtype %%d\", pbtype)\n", name))
+			sb.WriteString("\t}\n")
+		} else {
+			emitVertexLoop(&sb, vt0.reads, headerLen, "\t")
+		}
+	}
+
+	sb.WriteString("\n\treturn vertices, nil\n}\n")
+
+	// Helper functions
 	sb.WriteString(`
-func ps2ReadInt32(data []byte, pos *int) int32 {
-	if *pos+4 > len(data) { return 0 }
-	v := int32(binary.LittleEndian.Uint32(data[*pos:]))
-	*pos += 4
-	return v
+func ps2ri32(d []byte, p *int) int32 {
+	if *p+4 > len(d) { return 0 }
+	v := int32(binary.LittleEndian.Uint32(d[*p:])); *p += 4; return v
 }
-
-func ps2ReadUint32(data []byte, pos *int) uint32 {
-	if *pos+4 > len(data) { return 0 }
-	v := binary.LittleEndian.Uint32(data[*pos:])
-	*pos += 4
-	return v
+func ps2ru32(d []byte, p *int) uint32 {
+	if *p+4 > len(d) { return 0 }
+	v := binary.LittleEndian.Uint32(d[*p:]); *p += 4; return v
 }
-
-func ps2ReadFloat32(data []byte, pos *int) float32 {
-	if *pos+4 > len(data) { return 0 }
-	v := math.Float32frombits(binary.LittleEndian.Uint32(data[*pos:]))
-	*pos += 4
-	return v
+func ps2rf32(d []byte, p *int) float32 {
+	if *p+4 > len(d) { return 0 }
+	v := math.Float32frombits(binary.LittleEndian.Uint32(d[*p:])); *p += 4; return v
 }
-
-func ps2ReadInt16(data []byte, pos *int) int16 {
-	if *pos+2 > len(data) { return 0 }
-	v := int16(binary.LittleEndian.Uint16(data[*pos:]))
-	*pos += 2
-	return v
+func ps2ri16(d []byte, p *int) int16 {
+	if *p+2 > len(d) { return 0 }
+	v := int16(binary.LittleEndian.Uint16(d[*p:])); *p += 2; return v
 }
-
-func ps2ReadUint8(data []byte, pos *int) byte {
-	if *pos >= len(data) { return 0 }
-	v := data[*pos]
-	*pos++
-	return v
+func ps2ru8(d []byte, p *int) byte {
+	if *p >= len(d) { return 0 }
+	v := d[*p]; *p++; return v
 }
-
-func ps2ReadInt8(data []byte, pos *int) int8 {
-	if *pos >= len(data) { return 0 }
-	v := int8(data[*pos])
-	*pos++
-	return v
+func ps2ri8(d []byte, p *int) int8 {
+	if *p >= len(d) { return 0 }
+	v := int8(d[*p]); *p++; return v
 }
-
-// Ensure math is used
 var _ = math.Float32frombits
+var _ = fmt.Errorf
 `)
 
 	return sb.String()
 }
 
-func emitRead(sb *strings.Builder, r mips.ReadEntry, name, indent string) {
-	switch r.Type {
-	case "int32":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadInt32(data, &pos)\n", indent, name))
-	case "uint32":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadUint32(data, &pos)\n", indent, name))
-	case "float32":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadFloat32(data, &pos)\n", indent, name))
-	case "int16":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadInt16(data, &pos)\n", indent, name))
-	case "uint8":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadUint8(data, &pos)\n", indent, name))
-	case "int8":
-		sb.WriteString(fmt.Sprintf("%s%s := ps2ReadInt8(data, &pos)\n", indent, name))
-	}
+func emitV0Body(sb *strings.Builder, reads []mips.ReadEntry) {
+	sb.WriteString("\t\t// V0: float vertices (from PS2 ParsePrimBufferObjV0)\n")
+	sb.WriteString("\t\t_ = ps2ri32(data, &pos) // nmats\n")
+	sb.WriteString("\t\tnfaces := ps2ri32(data, &pos)\n")
+	sb.WriteString("\t\t_ = ps2ri32(data, &pos) // unk\n")
+	sb.WriteString("\t\tfor fi := int32(0); fi < nfaces; fi++ {\n")
+	sb.WriteString("\t\t\tnverts := ps2ri32(data, &pos)\n")
+	sb.WriteString("\t\t\t_ = ps2ri32(data, &pos) // mat\n")
+	sb.WriteString("\t\t\tfor vi := int32(0); vi < nverts; vi++ {\n")
+	sb.WriteString("\t\t\t\tv := PS2Vertex{\n")
+	sb.WriteString("\t\t\t\t\tX: ps2rf32(data, &pos), Y: ps2rf32(data, &pos), Z: ps2rf32(data, &pos),\n")
+	sb.WriteString("\t\t\t\t\tU: ps2rf32(data, &pos), V: ps2rf32(data, &pos),\n")
+	sb.WriteString("\t\t\t\t\tNX: ps2rf32(data, &pos), NY: ps2rf32(data, &pos), NZ: ps2rf32(data, &pos),\n")
+	sb.WriteString("\t\t\t\t}\n")
+	sb.WriteString("\t\t\t\tv.R = float32(ps2ru8(data, &pos)) / 255.0\n")
+	sb.WriteString("\t\t\t\tv.G = float32(ps2ru8(data, &pos)) / 255.0\n")
+	sb.WriteString("\t\t\t\tv.B = float32(ps2ru8(data, &pos)) / 255.0\n")
+	sb.WriteString("\t\t\t\tv.A = float32(ps2ru8(data, &pos)) / 255.0\n")
+	sb.WriteString("\t\t\t\tvertices = append(vertices, v)\n")
+	sb.WriteString("\t\t\t}\n")
+	sb.WriteString("\t\t}\n")
 }
 
-func generateV0Reads(sb *strings.Builder, trace []mips.ReadEntry) {
-	sb.WriteString("\t\t// V0 format (from PS2 trace)\n")
-	for i, r := range trace {
-		name := fmt.Sprintf("f%d", i)
-		emitRead(sb, r, name, "\t\t")
-		if i > 20 {
-			sb.WriteString(fmt.Sprintf("\t\t// ... %d more reads\n", len(trace)-i))
-			break
+func emitHeader(sb *strings.Builder, reads []mips.ReadEntry, ver uint16) int {
+	idx := 0
+	if ver > 1 {
+		sb.WriteString("\tif ver > 1 {\n\t\t_ = ps2ru32(data, &pos) // dictID\n\t}\n")
+		idx++
+	}
+	sb.WriteString("\tpbtype := ps2ri32(data, &pos)\n")
+	idx++
+	sb.WriteString("\t_ = ps2ri32(data, &pos) // nmats\n")
+	idx++
+	sb.WriteString("\tnfaces := ps2ri32(data, &pos)\n")
+	idx++
+	sb.WriteString("\t_ = ps2ri32(data, &pos) // unk\n")
+	idx++
+	sb.WriteString("\tp1 := ps2ri32(data, &pos)\n")
+	idx++
+	sb.WriteString("\tp2 := ps2ri32(data, &pos)\n")
+	idx++
+	sb.WriteString("\tp3 := ps2ri32(data, &pos)\n")
+	idx++
+	sb.WriteString("\t_, _, _ = p1, p2, p3\n")
+	return idx
+}
+
+func emitVertexLoop(sb *strings.Builder, reads []mips.ReadEntry, headerLen int, indent string) {
+	// Detect vertex pattern from trace
+	pattern, _ := detectVertexPattern(reads, headerLen)
+
+	sb.WriteString(fmt.Sprintf("%sfor fi := int32(0); fi < nfaces; fi++ {\n", indent))
+	sb.WriteString(fmt.Sprintf("%s\tnverts := ps2ri32(data, &pos)\n", indent))
+	sb.WriteString(fmt.Sprintf("%s\t_ = ps2ri32(data, &pos) // mat\n", indent))
+	sb.WriteString(fmt.Sprintf("%s\tfor vi := int32(0); vi < nverts; vi++ {\n", indent))
+
+	if pattern != nil {
+		emitVertexFromPattern(sb, pattern, indent+"\t\t")
+	} else {
+		sb.WriteString(fmt.Sprintf("%s\t\t// Could not detect vertex pattern from trace\n", indent))
+		sb.WriteString(fmt.Sprintf("%s\t\t// Trace has %d reads after header\n", indent, len(reads)-headerLen))
+	}
+
+	sb.WriteString(fmt.Sprintf("%s\t\tvertices = append(vertices, v)\n", indent))
+	sb.WriteString(fmt.Sprintf("%s\t}\n", indent))
+	sb.WriteString(fmt.Sprintf("%s}\n", indent))
+}
+
+func emitVertexFromPattern(sb *strings.Builder, pattern []mips.ReadEntry, indent string) {
+	// Count types to classify
+	floats := 0
+	int16s := 0
+	for _, r := range pattern {
+		switch r.Type {
+		case "float32":
+			floats++
+		case "int16":
+			int16s++
 		}
 	}
-}
 
-// splitHeaderAndVertices separates header reads from repeating vertex pattern.
-func splitHeaderAndVertices(trace []mips.ReadEntry) (header []mips.ReadEntry, vertexPattern []mips.ReadEntry) {
-	if len(trace) < 10 {
-		return trace, nil
-	}
-
-	// PrimBuffer v2 header: dictID(u32) + pbtype(i32) + nmats(i32) + nfaces(i32) + unk(i32) + p1(i32) + p2(i32) + p3(i32) = 8 fields
-	// Then per face: nverts(i32) + mat(i32) + vertex data
-	headerLen := 8
-	if headerLen > len(trace) {
-		return trace, nil
-	}
-	header = trace[:headerLen]
-
-	// After header: nverts + mat + vertex reads
-	remaining := trace[headerLen:]
-	if len(remaining) < 4 {
-		return header, nil
-	}
-
-	// Skip nverts + mat
-	remaining = remaining[2:]
-
-	// Detect repeating pattern by finding the vertex stride
-	// For pbtype=0: 8 floats + 4 uint8 = 12 reads per vertex
-	// For pbtype=2: 5 int16 + 3 int8 + 4 uint8 = 12 reads per vertex
-	if len(remaining) >= 12 {
-		vertexPattern = remaining[:12] // one vertex
-	}
-
-	return header, vertexPattern
-}
-
-func emitVertexReads(sb *strings.Builder, pattern []mips.ReadEntry, indent string) {
 	sb.WriteString(fmt.Sprintf("%svar v PS2Vertex\n", indent))
 
-	// Classify pattern
-	floatCount := 0
-	for _, r := range pattern {
-		if r.Type == "float32" {
-			floatCount++
-		}
-	}
+	if floats >= 8 {
+		// Float vertex (pbtype=0)
+		sb.WriteString(fmt.Sprintf("%sv.X = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Y = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Z = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.U = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.V = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.NX = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.NY = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.NZ = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.R = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.G = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.B = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.A = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+	} else if int16s >= 5 {
+		// Packed vertex (pbtype=2 or 4)
+		sb.WriteString(fmt.Sprintf("%spk1 := float32(1.0) / float32(int32(1) << p1)\n", indent))
+		sb.WriteString(fmt.Sprintf("%spk2 := float32(1.0) / float32(int32(1) << p2)\n", indent))
+		sb.WriteString(fmt.Sprintf("%spk3 := float32(1.0) / float32(int32(1) << p3)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.X = float32(ps2ri16(data, &pos)) * pk1\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Y = float32(ps2ri16(data, &pos)) * pk1\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Z = float32(ps2ri16(data, &pos)) * pk1\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.U = float32(ps2ri16(data, &pos)) * pk2\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.V = float32(ps2ri16(data, &pos)) * pk2\n", indent))
 
-	if floatCount >= 8 {
-		// Float vertex format (pbtype=0)
-		sb.WriteString(fmt.Sprintf("%sv.X = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.Y = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.Z = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.U = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.V = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.NX = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.NY = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.NZ = ps2ReadFloat32(data, &pos)\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.R = float32(ps2ReadUint8(data, &pos)) / 255.0\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.G = float32(ps2ReadUint8(data, &pos)) / 255.0\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.B = float32(ps2ReadUint8(data, &pos)) / 255.0\n", indent))
-		sb.WriteString(fmt.Sprintf("%sv.A = float32(ps2ReadUint8(data, &pos)) / 255.0\n", indent))
-	} else {
-		// Packed int16 format (pbtype=2/4)
-		sb.WriteString(fmt.Sprintf("%s// Packed vertex (int16 pos/uv, int8 normal, uint8 color)\n", indent))
-		sb.WriteString(fmt.Sprintf("%s_ = p1; _ = p2; _ = p3 // packing factors used below\n", indent))
-		sb.WriteString(fmt.Sprintf("%spk1 := float32(1.0) / float32(int(1) << int(p1))\n", indent))
-		sb.WriteString(fmt.Sprintf("%spk2 := float32(1.0) / float32(int(1) << int(p2))\n", indent))
-		sb.WriteString(fmt.Sprintf("%spk3 := float32(1.0) / float32(int(1) << int(p3))\n", indent))
-
-		for _, r := range pattern {
-			switch r.Type {
-			case "int16":
-				sb.WriteString(fmt.Sprintf("%s_ = ps2ReadInt16(data, &pos)\n", indent))
-			case "int8":
-				sb.WriteString(fmt.Sprintf("%s_ = ps2ReadInt8(data, &pos)\n", indent))
-			case "uint8":
-				sb.WriteString(fmt.Sprintf("%s_ = ps2ReadUint8(data, &pos)\n", indent))
+		// Check what comes after 5 int16s
+		remaining := pattern[5:]
+		ri := 0
+		// Normals
+		for ri < len(remaining) && remaining[ri].Type == "int8" {
+			switch ri {
+			case 0:
+				sb.WriteString(fmt.Sprintf("%sv.NX = float32(ps2ri8(data, &pos)) * pk3\n", indent))
+			case 1:
+				sb.WriteString(fmt.Sprintf("%sv.NY = float32(ps2ri8(data, &pos)) * pk3\n", indent))
+			case 2:
+				sb.WriteString(fmt.Sprintf("%sv.NZ = float32(ps2ri8(data, &pos)) * pk3\n", indent))
 			}
+			ri++
 		}
-		sb.WriteString(fmt.Sprintf("%s_ = pk1; _ = pk2; _ = pk3\n", indent))
+		// Colors
+		colorIdx := 0
+		for ri < len(remaining) && remaining[ri].Type == "uint8" {
+			switch colorIdx {
+			case 0:
+				sb.WriteString(fmt.Sprintf("%sv.R = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+			case 1:
+				sb.WriteString(fmt.Sprintf("%sv.G = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+			case 2:
+				sb.WriteString(fmt.Sprintf("%sv.B = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+			case 3:
+				sb.WriteString(fmt.Sprintf("%sv.A = float32(ps2ru8(data, &pos)) / 255.0\n", indent))
+			}
+			colorIdx++
+			ri++
+		}
+		// VGroup (if present — pbtype=4)
+		if ri < len(remaining) && remaining[ri].Type == "int16" {
+			sb.WriteString(fmt.Sprintf("%sv.VGroup = ps2ri16(data, &pos)\n", indent))
+		}
+	} else {
+		// Unknown pattern — emit raw reads
+		for _, r := range pattern {
+			sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+		}
 	}
 }
