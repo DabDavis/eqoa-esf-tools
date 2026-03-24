@@ -289,48 +289,76 @@ type PS2Vertex struct {
 	sb.WriteString("\tpos := 8\n")
 	sb.WriteString("\tvar vertices []PS2Vertex\n\n")
 
-	// Group variants by version
-	verGroups := map[uint16][]variant{}
+	// Separate v0 from v1+ variants
+	var v0trace *variantTrace
+	pbtypeTraces := map[int32]*variantTrace{} // pbtype → trace (merged across versions)
+	totalCount := 0
+
 	for _, v := range vkeys {
-		verGroups[v.ver] = append(verGroups[v.ver], v)
-	}
-
-	// Emit version dispatch
-	var vers []uint16
-	for v := range verGroups {
-		vers = append(vers, v)
-	}
-	sort.Slice(vers, func(i, j int) bool { return vers[i] < vers[j] })
-
-	for _, ver := range vers {
-		vGroup := verGroups[ver]
-		vt0 := variants[vGroup[0]]
-
-		if ver == 0 {
-			sb.WriteString("\tif ver == 0 {\n")
-			emitV0Body(&sb, vt0.reads)
-			sb.WriteString("\t\treturn vertices, nil\n\t}\n\n")
+		vt := variants[v]
+		if v.ver == 0 {
+			v0trace = vt
 			continue
 		}
+		// Merge all ver>0 by pbtype (v1 and v2+ share vertex format, differ only in dictID gate)
+		if existing, ok := pbtypeTraces[v.pbtype]; ok {
+			existing.count += vt.count
+		} else {
+			pbtypeTraces[v.pbtype] = vt
+		}
+		totalCount += vt.count
+	}
 
-		sb.WriteString(fmt.Sprintf("\t// Version %d (%d objects traced)\n", ver, vt0.count))
+	// Emit v0 path
+	if v0trace != nil && len(v0trace.reads) > 0 {
+		sb.WriteString("\tif ver == 0 {\n")
+		emitV0Body(&sb, v0trace.reads)
+		sb.WriteString("\t\treturn vertices, nil\n\t}\n\n")
+	}
 
-		// Header: common reads before pbtype dispatch
-		headerLen := emitHeader(&sb, vt0.reads, ver)
+	// Emit v1+ path with merged version gate
+	if len(pbtypeTraces) > 0 {
+		sb.WriteString(fmt.Sprintf("\t// ver >= 1 (%d objects traced across all versions)\n", totalCount))
+		sb.WriteString("\tif ver > 1 {\n\t\t_ = ps2ru32(data, &pos) // dictID (ver >= 2 only)\n\t}\n")
 
-		// If multiple pbtypes, emit switch
-		if len(vGroup) > 1 {
-			sb.WriteString("\n\tswitch pbtype {\n")
-			for _, v := range vGroup {
-				vt := variants[v]
-				sb.WriteString(fmt.Sprintf("\tcase %d: // %d objects traced\n", v.pbtype, vt.count))
+		// Find any trace for header emission
+		var anyTrace *variantTrace
+		for _, vt := range pbtypeTraces {
+			anyTrace = vt
+			break
+		}
+		headerLen := 8 // dictID already emitted above; pbtype + 6 fields
+
+		sb.WriteString("\tpbtype := ps2ri32(data, &pos)\n")
+		sb.WriteString("\t_ = ps2ri32(data, &pos) // nmats\n")
+		sb.WriteString("\tnfaces := ps2ri32(data, &pos)\n")
+		sb.WriteString("\t_ = ps2ri32(data, &pos) // unk\n")
+		sb.WriteString("\tp1 := ps2ri32(data, &pos)\n")
+		sb.WriteString("\tp2 := ps2ri32(data, &pos)\n")
+		sb.WriteString("\tp3 := ps2ri32(data, &pos)\n")
+		sb.WriteString("\t_, _, _ = p1, p2, p3\n\n")
+
+		// Sort pbtypes
+		var pbtypes []int32
+		for pb := range pbtypeTraces {
+			pbtypes = append(pbtypes, pb)
+		}
+		sort.Slice(pbtypes, func(i, j int) bool { return pbtypes[i] < pbtypes[j] })
+
+		if len(pbtypes) > 1 {
+			sb.WriteString("\tswitch pbtype {\n")
+			for _, pb := range pbtypes {
+				vt := pbtypeTraces[pb]
+				sb.WriteString(fmt.Sprintf("\tcase %d: // %d objects traced\n", pb, vt.count))
 				emitVertexLoop(&sb, vt.reads, headerLen, "\t\t")
 			}
 			sb.WriteString("\tdefault:\n")
 			sb.WriteString(fmt.Sprintf("\t\treturn nil, fmt.Errorf(\"%s: unsupported pbtype %%d\", pbtype)\n", name))
 			sb.WriteString("\t}\n")
 		} else {
-			emitVertexLoop(&sb, vt0.reads, headerLen, "\t")
+			vt := pbtypeTraces[pbtypes[0]]
+			_ = anyTrace
+			emitVertexLoop(&sb, vt.reads, headerLen, "\t")
 		}
 	}
 
