@@ -1,6 +1,9 @@
 package esf
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // matPalProvider is implemented by sprite types that can provide a MaterialPalette.
 // SimpleSprite, SimpleSubSprite, and SkinSubSprite all satisfy this interface.
@@ -175,8 +178,9 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 			}
 
 		case 5:
-			// PS2 ParseSkinPrimBuffer: pos(3×int16) + uv(2×int16) + normal(3×int8)
-			// + color(4×uint8) + vgroup(int16). Bone/weight data stored separately.
+			// PS2 ParseSkinPrimBufferObjV0 (0x00433AE0) — separate function on PS2.
+			// Same vertex layout as pbtype 4: pos(3×int16) + uv(2×int16) + normal(3×int8)
+			// + color(4×uint8) + vgroup(int16).
 			for i := int32(0); i < nverts; i++ {
 				x := file.readInt16()
 				y := file.readInt16()
@@ -185,8 +189,8 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 				v := file.readInt16()
 
 				normal := file.readBytes(3)
-				color := file.readBytes(4)  // PS2: color, NOT bone indices
-				vgroup := file.readInt16()  // PS2: vertex group index
+				color := file.readBytes(4)
+				vgroup := file.readInt16()
 
 				px := float32(x) * packing1
 				py := float32(y) * packing1
@@ -211,6 +215,12 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 				}
 				vl.Vertices = append(vl.Vertices, vtx)
 			}
+
+		default:
+			// PS2 ParsePrimBuffer only supports types 0, 2, 4 (type 5 is ParseSkinPrimBufferObjV0).
+			// Unknown pbtype → return error. Without this, the file position becomes misaligned
+			// and downstream reads panic with index-out-of-range.
+			return fmt.Errorf("PrimBuffer: unsupported pbtype %d (version %d)", pbtype, ver)
 		}
 
 		pb.VertexLists = append(pb.VertexLists, vl)
