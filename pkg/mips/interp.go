@@ -34,6 +34,7 @@ type Interp struct {
 	runtime runtimeState
 	vu0          vu0State     // VU0 vector unit (128-bit SIMD)
 	packetStream *PacketStream // CLIENT opcode packet data (nil for ESF mode)
+	drdpStream   *DRDPStream   // DRDP protocol packet data (nil for ESF/CLIENT mode)
 
 	// Debug (ported from PCSX2 DebugTools)
 	breakpoints      []Breakpoint

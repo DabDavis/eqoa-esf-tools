@@ -179,7 +179,14 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
-	// 2a. CLIENT stream reads — route through PacketStream
+	// 2a. DRDP buffer reads — route through DRDPStream
+	if m.drdpStream != nil {
+		if m.handleDRDPRead(target, m.drdpStream) {
+			return true
+		}
+	}
+
+	// 2b. CLIENT stream reads — route through PacketStream
 	if m.packetStream != nil {
 		if m.handleClientRead(target, m.packetStream) {
 			return true
