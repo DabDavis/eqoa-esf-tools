@@ -29,6 +29,10 @@ type Interp struct {
 	Steps       int
 	Intercepted int
 
+	// PS2 runtime state (heap + fake objects)
+	heap    heapState
+	runtime runtimeState
+
 	// Debug (ported from PCSX2 DebugTools)
 	breakpoints      []Breakpoint
 	memChecks        []*MemCheck

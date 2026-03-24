@@ -10,17 +10,25 @@ import "math"
 // ReadEnd and Read* to parse sub-objects. Adding a function here lets
 // the MIPS interpreter execute it fully, capturing all its reads.
 var nativeSubParsers = []uint32{
-	// CSprite sub-parsers that ONLY read data (no runtime object creation).
-	// These are safe to execute natively — they just do:
-	//   ReadBegin → count → N × fields → ReadEnd
-	0x00437B80, // ParseCSpritePlayList — count + N × (dictID+index+speed+playOnce+sounds)
-	0x00437E30, // ParseCSpriteNodeIDList — count + N × (nodeIndex+boneIndex)
-	0x00437F18, // ParseCSpriteASlotList — count + N × (attachSlot+boneIndex)
-	0x00437FF8, // ParseCSpriteTSlotList — count + N × (meshIndex+slotID+flag)
-	0x00438100, // ParseCSpriteContSound — dictID + volume
-	0x00437A78, // ParseCSpriteSkinList — count + N × (dictID+skinIndex)
-	0x00436248, // ParseHSpriteTriggers — count + N × refID
-	0x004372D8, // ParseRefMap — dictID + count + N × (refID+boneIndex)
+	// CSprite sub-parsers that should execute natively.
+	// Critical: sub-parsers that call ReadBegin/ReadEnd MUST run natively
+	// so the tree stream stays in sync. A stubbed sub-parser that skips
+	// ReadEnd leaves the tree stream pointing at the wrong node.
+
+	// Simple data readers (count + fields)
+	0x00437B80, // ParseCSpritePlayList
+	0x00437E30, // ParseCSpriteNodeIDList
+	0x00437F18, // ParseCSpriteASlotList
+	0x00437FF8, // ParseCSpriteTSlotList
+	0x00438100, // ParseCSpriteContSound
+	0x00437A78, // ParseCSpriteSkinList
+	0x00436248, // ParseHSpriteTriggers
+	0x004372D8, // ParseRefMap
+
+	// ParseMaterialPal and its sub-parsers are NOT whitelisted because they
+	// need VIRaster (GPU) functions to create surfaces/materials. Instead,
+	// ParseMaterialPal is handled by a special stub that reads past its
+	// ReadBegin/ReadEnd pair to keep the tree stream in sync.
 }
 
 // Known Read* function addresses (from SUPPORT symbol map)
@@ -60,6 +68,11 @@ func (m *Interp) handleJAL(target uint32) bool {
 		})
 	}
 
+	// Runtime object functions (VIDictionary, VIScene, VIRaster)
+	if m.handleRuntime(target) {
+		return true
+	}
+
 	if name, ok := readFuncs[target]; ok {
 		m.handleRead(name)
 		m.Intercepted++
@@ -76,6 +89,54 @@ func (m *Interp) handleJAL(target uint32) bool {
 		exp := m.fregs[13]  // $f13 = second float arg (from $f14 on PS2, but decompiler maps to 13)
 		result := float32(math.Pow(float64(base), float64(exp)))
 		m.fregs[0] = result // $f0 = return value
+		m.Intercepted++
+		return true
+	}
+
+	// ParseMaterialPal — skip by calling ReadBegin + ReadEnd to advance
+	// the tree stream past the MaterialPalette child. Can't run natively
+	// because it needs VIRaster to create surfaces/materials.
+	if target == 0x00435240 {
+		if m.Reader != nil {
+			m.Reader.ReadBegin() // opens 0x1110 MaterialPalette
+			m.Reader.ReadEnd()   // closes it without reading contents
+		}
+		m.wReg32(2, 0) // return 0 (success)
+		m.Intercepted++
+		return true
+	}
+
+	// Skip-stubs: sub-parsers that call ReadBegin internally.
+	// When stubbed, they must still call ReadBegin + ReadEnd to keep
+	// the tree stream's child index in sync.
+	for _, skipAddr := range []uint32{
+		0x00435240, // ParseMaterialPal
+		0x0043A790, // ParseSoundArray
+		0x004379D8, // ParseCSpriteSpriteArray
+		0x004364C0, // ParseHSpriteAnimArray
+		0x00435FA0, // ParseHSpriteHierarchy
+	} {
+		if target == skipAddr {
+			if m.Reader != nil {
+				m.Reader.ReadBegin() // open the child
+				m.Reader.ReadEnd()   // close it (skip contents)
+			}
+			m.wReg32(2, 0)
+			m.Intercepted++
+			return true
+		}
+	}
+
+	// VIScene runtime object creation — return fake pointers.
+	// These are called by whitelisted sub-parsers (ParseRefMap, etc.)
+	// and need non-null pointers for Init/Insert to write to.
+	if target == 0x00463CE8 { // CreateRefMap
+		m.wReg32(2, 0) // return index 0
+		m.Intercepted++
+		return true
+	}
+	if target == 0x00463D78 { // RefMap — return fake pointer
+		m.wReg32(2, int64(0x01F50000))
 		m.Intercepted++
 		return true
 	}
@@ -112,21 +173,31 @@ func (m *Interp) handleJAL(target uint32) bool {
 	// For non-zero dictIDs, the parser uses the Find result to decide whether
 	// to create a new object or reuse an existing one.
 	if target == 0x003E4318 {
-		// Write resource type to output pointer ($a2)
-		// and index to output pointer ($a3)
-		a2 := uint32(m.rReg(6)) // &resourceType
-		a3 := uint32(m.rReg(7)) // &index
-		// Peek at the comparison: PS2 code checks type against a constant
-		// loaded right after Find returns. We need the right type.
-		// Common types: 5=Sprite, 9=CSprite, 11=PrimBuffer, 14=Sound, 21=SpellEffect
-		// Write 0 and let the parser handle it; most parsers check dictID==0 first
-		if a2 != 0 {
-			m.store16(a2, 0) // resource type (will be checked)
+		// VIDictionary::Find — always return 1 (not found).
+		// During parsing, objects are being created for the first time.
+		// The "not found" path leads to object creation which is what we want.
+		//
+		// After Find returns non-zero, parsers check the resource type:
+		//   li $v0, N; if (type != N) → error
+		// We write the expected type N to the output pointer.
+		// Peek at return+8 (past the beq check delay slot) for "li $v0, N":
+		a2 := uint32(m.rReg(6)) // &resourceType output
+		ra := uint32(m.rReg(31))
+		if a2 != 0 && ra > 0 && ra+8 < uint32(len(m.code)) {
+			// The pattern after Find is:
+			//   beq/bnez $v0 → branch (delay: lw $v1, ...)
+			//   li $v0, N    ← the expected type
+			liInsn := m.load32(ra + 4) // instruction after delay slot
+			liOp := (liInsn >> 26) & 0x3F
+			liRt := (liInsn >> 16) & 0x1F
+			liImm := liInsn & 0xFFFF
+			if liOp == 9 && liRt == 2 { // ADDIU $v0, $zero, N (li $v0, N)
+				m.store16(a2, uint16(liImm)) // write expected type
+			} else if liOp == 8 && liRt == 2 { // ADDI variant
+				m.store16(a2, uint16(liImm))
+			}
 		}
-		if a3 != 0 {
-			m.store32(a3, 0) // index
-		}
-		m.wReg32(2, 0) // return 0 = found
+		m.wReg32(2, 1) // return 1 = not found
 		m.Intercepted++
 		return true
 	}
@@ -320,10 +391,13 @@ func (m *Interp) handleRead(name string) {
 // reads from fake objects return 0 instead of stale EE dump data.
 // Critical: the EE dump may have non-zero data at these addresses from
 // the game's runtime state, causing incorrect branch decisions.
+// ZeroFakePointersExported is the exported version of zeroFakePointers.
+func ZeroFakePointersExported(interp *Interp) { zeroFakePointers(interp) }
+
 func zeroFakePointers(interp *Interp) {
 	// Each fake pointer region: 256 bytes should cover any struct fields
-	for _, base := range []uint32{0x01F60000, 0x01F70000, 0x01F80000,
-		0x01F90000, 0x01FA0000, 0x01FB0000, 0x01FC0000, 0x01FD0000} {
+	for _, base := range []uint32{0x01F40000, 0x01F50000, 0x01F60000, 0x01F70000,
+		0x01F80000, 0x01F90000, 0x01FA0000, 0x01FB0000, 0x01FC0000, 0x01FD0000} {
 		for i := uint32(0); i < 256; i++ {
 			interp.Store8At(base+i, 0)
 		}
