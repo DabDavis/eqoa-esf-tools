@@ -76,12 +76,31 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
-	// VIDictionary::Find — return "not found" (non-zero) so parsers skip
-	// dictionary registration and go straight to object creation.
-	// PS2 parsers check: if (Find() == 0) { check type == 11; } else { CreatePrimBuffer(); }
-	// Returning non-zero takes the "not found" path which skips the type assertion.
+	// VIDictionary::Find — return 0 (found) and write a plausible resource type.
+	// PS2 parsers call: Find(dict, dictID, &resourceType, &index)
+	// After Find, they check if the resource type matches the expected value.
+	// $a2 = &resourceType (output), $a3 = &index (output).
+	// We write type from the next instruction's comparison constant (9=CSprite,
+	// 11=PrimBuffer, etc.) — but since we can't peek ahead, we write 0 which
+	// works when dictID is 0 (parser skips Find entirely for dictID==0).
+	// For non-zero dictIDs, the parser uses the Find result to decide whether
+	// to create a new object or reuse an existing one.
 	if target == 0x003E4318 {
-		m.wReg32(2, 1) // return 1 = not found
+		// Write resource type to output pointer ($a2)
+		// and index to output pointer ($a3)
+		a2 := uint32(m.rReg(6)) // &resourceType
+		a3 := uint32(m.rReg(7)) // &index
+		// Peek at the comparison: PS2 code checks type against a constant
+		// loaded right after Find returns. We need the right type.
+		// Common types: 5=Sprite, 9=CSprite, 11=PrimBuffer, 14=Sound, 21=SpellEffect
+		// Write 0 and let the parser handle it; most parsers check dictID==0 first
+		if a2 != 0 {
+			m.store16(a2, 0) // resource type (will be checked)
+		}
+		if a3 != 0 {
+			m.store32(a3, 0) // index
+		}
+		m.wReg32(2, 0) // return 0 = found
 		m.Intercepted++
 		return true
 	}
