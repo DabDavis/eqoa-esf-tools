@@ -316,7 +316,9 @@ type PS2Vertex struct {
 	for _, v := range vkeys {
 		vt := variants[v]
 		if v.ver == 0 {
-			continue // v0 handled by existing Go parser
+			// v0 handled by existing Go parser, but still collect traces
+			// for documentation purposes
+			continue
 		}
 		// Merge all ver>0 by pbtype (v1 and v2+ share vertex format, differ only in dictID gate)
 		if existing, ok := pbtypeTraces[v.pbtype]; ok {
