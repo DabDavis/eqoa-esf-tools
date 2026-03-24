@@ -88,9 +88,10 @@ func (a *HSpriteAnim) Load(file *ObjFile) error {
 	}
 
 	// Read per-node data: refID + frames.
-	// IMPORTANT: Node data comes immediately after the header.
-	// Extra keyframe timing data (numKF × 8 bytes) follows AFTER node data, not before it.
-	// Getting this wrong shifts all node reads and corrupts RefIDs + frame data.
+	// PS2 ParseHSpriteAnimObj dispatches on Format:
+	//   format=0: 8 × float32 per frame (32 bytes) — converted to int16 via ×32767 (quat) / ×512 (pos/scale)
+	//   format=1: 8 × int16 per frame (16 bytes) — stored directly as VIHSpritePackFrame
+	// 17433/17434 EQOA animations are v3 format=1. 1 animation (SPELLFX.ESF v2) uses format=0.
 	if a.NumNodes > 0 && a.NumFrames > 0 {
 		a.Nodes = make([]AnimNode, a.NumNodes)
 		for n := int32(0); n < a.NumNodes; n++ {
@@ -100,15 +101,40 @@ func (a *HSpriteAnim) Load(file *ObjFile) error {
 			a.Nodes[n].Frames = make([]AnimPackFrame, a.NumFrames)
 			for f := int32(0); f < a.NumFrames; f++ {
 				pf := &a.Nodes[n].Frames[f]
-				pf.Quat[0] = int16(binary.LittleEndian.Uint16(raw[off+0:]))
-				pf.Quat[1] = int16(binary.LittleEndian.Uint16(raw[off+2:]))
-				pf.Quat[2] = int16(binary.LittleEndian.Uint16(raw[off+4:]))
-				pf.Quat[3] = int16(binary.LittleEndian.Uint16(raw[off+6:]))
-				pf.Scale = int16(binary.LittleEndian.Uint16(raw[off+8:]))
-				pf.Pos[0] = int16(binary.LittleEndian.Uint16(raw[off+10:]))
-				pf.Pos[1] = int16(binary.LittleEndian.Uint16(raw[off+12:]))
-				pf.Pos[2] = int16(binary.LittleEndian.Uint16(raw[off+14:]))
-				off += 16
+				if a.Format == 0 {
+					// Format 0: 8 × float32 per frame (32 bytes).
+					// PS2 reads as floats, then converts to packed int16:
+					//   quat components × 32767 (1/0x38000100 inverse)
+					//   scale/pos components × 512 (1/0x3B000000 inverse)
+					q0 := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+0:]))
+					q1 := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+4:]))
+					q2 := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+8:]))
+					q3 := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+12:]))
+					sc := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+16:]))
+					px := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+20:]))
+					py := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+24:]))
+					pz := math.Float32frombits(binary.LittleEndian.Uint32(raw[off+28:]))
+					pf.Quat[0] = int16(q0 * 32767)
+					pf.Quat[1] = int16(q1 * 32767)
+					pf.Quat[2] = int16(q2 * 32767)
+					pf.Quat[3] = int16(q3 * 32767)
+					pf.Scale = int16(sc * 512)
+					pf.Pos[0] = int16(px * 512)
+					pf.Pos[1] = int16(py * 512)
+					pf.Pos[2] = int16(pz * 512)
+					off += 32
+				} else {
+					// Format 1: 8 × int16 per frame (16 bytes) — direct packed storage.
+					pf.Quat[0] = int16(binary.LittleEndian.Uint16(raw[off+0:]))
+					pf.Quat[1] = int16(binary.LittleEndian.Uint16(raw[off+2:]))
+					pf.Quat[2] = int16(binary.LittleEndian.Uint16(raw[off+4:]))
+					pf.Quat[3] = int16(binary.LittleEndian.Uint16(raw[off+6:]))
+					pf.Scale = int16(binary.LittleEndian.Uint16(raw[off+8:]))
+					pf.Pos[0] = int16(binary.LittleEndian.Uint16(raw[off+10:]))
+					pf.Pos[1] = int16(binary.LittleEndian.Uint16(raw[off+12:]))
+					pf.Pos[2] = int16(binary.LittleEndian.Uint16(raw[off+14:]))
+					off += 16
+				}
 			}
 		}
 	}

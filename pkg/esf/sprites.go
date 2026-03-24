@@ -429,8 +429,17 @@ type CSprite struct {
 	PartEmitters []CSpritePartEmitter  // bone-attached particle emitters (from 0x2960)
 	PartDefs     []*ParticleDefinition // particle definitions embedded in CSprite (from 0x2950 children)
 	SoundClips   []SoundClip           // animation-triggered sounds (from 0xB070 container)
+	SkinList     []SkinListEntry       // skin configuration entries (from 0x2900, ParseCSpriteSkinList)
+	TriggerIDs   []int32              // animation trigger refIDs (from 0x2450, ParseHSpriteTriggers)
 	ContSoundID  int32                 // continuous/ambient sound DictID (from 0x2940, 0=none)
 	ContSoundVol float32               // continuous sound volume (from 0x2940, default 1.0)
+}
+
+// SkinListEntry holds one entry from the CSprite SkinList (ESF type 0x2900).
+// PS2 ParseCSpriteSkinList at 0x00437A78: count(int32) + count × (dictID(uint32) + skinIndex(int32)).
+type SkinListEntry struct {
+	DictID    int32
+	SkinIndex int32
 }
 
 func (c *CSprite) Load(file *ObjFile) error {
@@ -552,6 +561,40 @@ func (c *CSprite) Load(file *ObjFile) error {
 					NodeIndex: file.readInt32(),
 					BoneIndex: file.readInt32(),
 				}
+			}
+		}
+	}
+
+	// Parse SkinList (skin configuration entries).
+	// PS2: ParseCSpriteSkinList (0x00437A78), tag 0x2900.
+	// Wire format: count(int32) + count × (dictID(uint32) + skinIndex(int32)).
+	skinInfo := c.info.Child(TypeCSpriteSkinList)
+	if skinInfo != nil && skinInfo.Size >= 4 {
+		file.Seek(skinInfo.Offset)
+		count := int(file.readInt32())
+		if count > 0 && count < 256 {
+			c.SkinList = make([]SkinListEntry, count)
+			for i := 0; i < count; i++ {
+				c.SkinList[i] = SkinListEntry{
+					DictID:    file.readInt32(),
+					SkinIndex: file.readInt32(),
+				}
+			}
+		}
+	}
+
+	// Parse HSpriteTriggers (animation event triggers on CSprite).
+	// PS2: ParseHSpriteTriggers (0x00436248), tag 0x2450.
+	// Wire format: count(int32) + count × refID(int32).
+	// Used for "Spell FX 1-4" animation event triggers — FindTrigger/ResetTrigger.
+	trigInfo := c.info.Child(TypeHSpriteTriggers)
+	if trigInfo != nil && trigInfo.Size >= 4 {
+		file.Seek(trigInfo.Offset)
+		count := int(file.readInt32())
+		if count > 0 && count < 256 {
+			c.TriggerIDs = make([]int32, count)
+			for i := 0; i < count; i++ {
+				c.TriggerIDs[i] = file.readInt32()
 			}
 		}
 	}

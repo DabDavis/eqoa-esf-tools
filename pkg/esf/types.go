@@ -30,6 +30,7 @@ const (
 	TypeCSpriteArray              uint16 = 0x2800
 	TypeLODSprite                 uint16 = 0x2a10
 	TypeLODSpriteArray            uint16 = 0x2a20
+	TypeCSpriteSkinList           uint16 = 0x2900
 	TypeCSpritePlayList           uint16 = 0x2910
 	TypeCSpriteNodeIDList         uint16 = 0x2915
 	TypeCSpriteASlotList          uint16 = 0x2920
