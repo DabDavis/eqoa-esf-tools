@@ -163,48 +163,91 @@ func zigzagDecode(n uint32) int32 {
 	return int32((n >> 1) ^ -(n & 1))
 }
 
+// StructWrite records a memory write to the entity/client struct.
+type StructWrite struct {
+	Offset uint32 // offset from entity base
+	Size   int    // 1, 2, or 4 bytes
+	Value  uint32 // value written
+}
+
+// OpcodeResult holds the complete result of running a PS2 opcode handler.
+type OpcodeResult struct {
+	Result int32
+	Reads  []PacketRead
+	Writes []StructWrite // writes to entity struct
+	Steps  int
+}
+
 // RunOpcodeHandler runs a CLIENT opcode handler on packet data.
-// Returns the handler's result and the captured read trace.
+// Captures both reads from the packet stream AND writes to the entity struct.
 func RunOpcodeHandler(eeDump []byte, handlerAddr uint32, packetData []byte) (int32, []PacketRead) {
+	r := RunOpcodeHandlerFull(eeDump, handlerAddr, packetData)
+	return r.Result, r.Reads
+}
+
+// RunOpcodeHandlerFull runs a CLIENT opcode handler and returns full results
+// including struct writes.
+func RunOpcodeHandlerFull(eeDump []byte, handlerAddr uint32, packetData []byte) OpcodeResult {
 	interp := New(eeDump)
 	ps := NewPacketStream(packetData)
 
-	// Set up the VIClient/entity context
-	// The mega-function handlers receive:
-	//   $a0 = VIClient* (this)
-	//   $a1 = stream* (VIMemStream)
-	// The stream object has a pointer to the data buffer
-	thisAddr := uint32(0x01FE0000)
-	streamAddr := interp.heapAlloc(256)
+	// The mega-function handlers use $sp-based context.
+	// The stream object is at $sp+0 (first arg after handler entry).
+	// The entity pointer ($s4) is set by the mega-function dispatch.
+	//
+	// For direct handler calls, we set up:
+	//   $a0/$sp = stream context (VIMemStream embedded in stack frame)
+	//   $s4 = entity pointer (VIClient*)
+	entityAddr := uint32(0x01FE0000)
+	entitySize := uint32(0x10000) // 64KB for entity struct
 
-	// Store packet data pointer in the stream struct
-	// VIMemStream layout (from decompilation):
-	//   +0x00: data pointer
-	//   +0x04: current position
-	//   +0x08: total size
-	//   +0x0C: error flag
+	// Zero entity struct
+	for i := uint32(0); i < entitySize; i += 4 {
+		interp.store32(entityAddr+i, 0)
+	}
+
+	// Set up stream on the stack
+	// The mega-function at 0x00BD0DC8 sets up a stack frame with the stream.
+	// Individual handlers expect $sp to point to a context with:
+	//   $sp+0x00: stream data (inline VIMemStream)
+	//   The stream reads use $sp as the base for reading.
+	streamAddr := interp.heapAlloc(256)
 	packetBuf := interp.heapAlloc(uint32(len(packetData)) + 16)
 	for i, b := range packetData {
 		interp.store8(packetBuf+uint32(i), b)
 	}
 	interp.store32(streamAddr+0x00, packetBuf)
-	interp.store32(streamAddr+0x04, 0)                       // position = 0
-	interp.store32(streamAddr+0x08, uint32(len(packetData))) // size
-	interp.store32(streamAddr+0x0C, 0)                       // no error
-
-	// Zero the entity/client struct
-	for i := uint32(0); i < 4096; i++ {
-		interp.store8(thisAddr+i, 0)
-	}
-
-	// Store stream pointer where handlers expect it
-	// (varies by handler — some use $a1, some use this+offset)
+	interp.store32(streamAddr+0x04, 0)
+	interp.store32(streamAddr+0x08, uint32(len(packetData)))
+	interp.store32(streamAddr+0x0C, 0)
 
 	// Enable client read interception
 	interp.packetStream = ps
 
-	// Run the handler
-	result := interp.Run(handlerAddr, nil, thisAddr, streamAddr)
+	// Snapshot entity memory before handler runs
+	// (entity is all zeros, so any non-zero byte after = a write)
 
-	return result, ps.Reads
+	// Run the handler
+	// Handlers expect: $sp = stream context, $s4 = entity pointer
+	// We pass streamAddr as first arg ($a0) and entityAddr gets set via $s4
+	result := interp.Run(handlerAddr, nil, streamAddr)
+
+	// Collect writes to entity struct
+	var writes []StructWrite
+	for addr, val := range interp.writes {
+		if addr >= entityAddr && addr < entityAddr+entitySize && val != 0 {
+			writes = append(writes, StructWrite{
+				Offset: addr - entityAddr,
+				Size:   1,
+				Value:  uint32(val),
+			})
+		}
+	}
+
+	return OpcodeResult{
+		Result: result,
+		Reads:  ps.Reads,
+		Writes: writes,
+		Steps:  interp.Steps,
+	}
 }
