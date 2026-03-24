@@ -40,8 +40,14 @@ var parserInfo = map[uint16]struct {
 	// Sprite variants
 	0x2C00: {0x0043B478, "GroupSprite", true},
 	0x2F00: {0x0043C230, "FloraSprite", true},
+	0x2A00: {0x0043B0C8, "SkinSprite", true},
+	0x2E00: {0x0043AC70, "LODSprite", true},
+	// Mesh variants
+	0x1210: {0x00432F98, "SkinPrimBuffer", false},
 	// Sound
 	0xB000: {0x00431FA8, "Sound", true},
+	// Zone lighting
+	0x3270: {0x004393E8, "StaticLighting", true},
 }
 
 // variant identifies a unique parse path (version + pbtype combination).
