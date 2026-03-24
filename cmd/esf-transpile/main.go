@@ -198,20 +198,38 @@ func scanType(data []byte, typ uint16, maxCount int) []int {
 	return offsets
 }
 
-// detectVertexPattern analyzes the reads after header to find per-vertex repeat.
+// detectVertexPattern analyzes reads to find the repeating per-vertex pattern.
+// headerLen is a hint for where to start looking (skipped reads assumed to be header).
+// Returns the pattern and count, or nil if no pattern found.
 func detectVertexPattern(reads []mips.ReadEntry, headerLen int) (vertexReads []mips.ReadEntry, vertexCount int) {
-	if headerLen+2 >= len(reads) {
-		return nil, 0
+	// Try starting from different offsets after the header to find where
+	// the repeating pattern begins. CollBuffer has 3 reads per vertex-group
+	// header (num + primg + list), PrimBuffer has 2 (nverts + mat).
+	for skip := 2; skip <= 4; skip++ {
+		startIdx := headerLen + skip
+		if startIdx >= len(reads) {
+			continue
+		}
+		vr, vc := findRepeat(reads[startIdx:])
+		if vc >= 2 {
+			return vr, vc
+		}
 	}
+	return nil, 0
+}
 
-	// After header: nverts(i32) + mat(i32) + vertex data
-	after := reads[headerLen+2:] // skip nverts + mat
+func findRepeat(after []mips.ReadEntry) ([]mips.ReadEntry, int) {
 	if len(after) < 4 {
 		return nil, 0
 	}
 
-	// Try strides 12 (float: 8f+4b), 12 (packed: 5i16+3i8+4u8), 13 (packed+vgroup)
-	for _, stride := range []int{12, 13, 14, 10, 11} {
+	// Try all plausible vertex strides:
+	//   3  = CollBuffer cbtype=0 (3×float pos)
+	//   4  = CollBuffer cbtype=1 (3×int16 → 3 reads, but may be 4 with padding)
+	//   5  = CollBuffer cbtype=3 (3×int16 + vgroup + flora)
+	//  12  = PrimBuffer pbtype=0 (8×float + 4×uint8) or pbtype=2 (5×int16 + 3×int8 + 4×uint8)
+	//  13  = PrimBuffer pbtype=4 (5×int16 + 3×int8 + 4×uint8 + int16)
+	for _, stride := range []int{3, 4, 5, 12, 13, 14, 10, 11, 6, 7, 8} {
 		if stride > len(after) {
 			continue
 		}
@@ -321,22 +339,20 @@ type PS2Vertex struct {
 		sb.WriteString(fmt.Sprintf("\t// ver >= 1 (%d objects traced across all versions)\n", totalCount))
 		sb.WriteString("\tif ver > 1 {\n\t\t_ = ps2ru32(data, &pos) // dictID (ver >= 2 only)\n\t}\n")
 
-		// Find any trace for header emission
+		// Auto-detect header length by finding where the vertex repeat starts.
+		// Use any trace to detect the pattern.
 		var anyTrace *variantTrace
 		for _, vt := range pbtypeTraces {
 			anyTrace = vt
 			break
 		}
-		headerLen := 8 // dictID already emitted above; pbtype + 6 fields
 
-		sb.WriteString("\tpbtype := ps2ri32(data, &pos)\n")
-		sb.WriteString("\t_ = ps2ri32(data, &pos) // nmats\n")
-		sb.WriteString("\tnfaces := ps2ri32(data, &pos)\n")
-		sb.WriteString("\t_ = ps2ri32(data, &pos) // unk\n")
-		sb.WriteString("\tp1 := ps2ri32(data, &pos)\n")
-		sb.WriteString("\tp2 := ps2ri32(data, &pos)\n")
-		sb.WriteString("\tp3 := ps2ri32(data, &pos)\n")
-		sb.WriteString("\t_, _, _ = p1, p2, p3\n\n")
+		// Find header length: everything before the first repeating pattern
+		headerLen := findHeaderLen(anyTrace.reads)
+
+		// Emit header fields from the trace
+		sb.WriteString(fmt.Sprintf("\t// Header: %d fields (auto-detected from PS2 trace)\n", headerLen))
+		emitAutoHeader(&sb, anyTrace.reads, headerLen)
 
 		// Sort pbtypes
 		var pbtypes []int32
@@ -395,6 +411,70 @@ var _ = fmt.Errorf
 `)
 
 	return sb.String()
+}
+
+// findHeaderLen determines how many reads are "header" before the vertex loop.
+// Scans from the end backward looking for where the repeating pattern starts.
+func findHeaderLen(reads []mips.ReadEntry) int {
+	// Try detecting a repeating pattern starting from each position
+	for start := 1; start < len(reads) && start < 20; start++ {
+		// Try skipping 2-4 reads for the per-group header (num+primg+list or nverts+mat)
+		for skip := 2; skip <= 4; skip++ {
+			idx := start + skip
+			if idx >= len(reads) {
+				continue
+			}
+			_, count := findRepeat(reads[idx:])
+			if count >= 2 {
+				return start
+			}
+		}
+	}
+	// Fallback: assume first 8 reads are header
+	if len(reads) > 8 {
+		return 8
+	}
+	return len(reads)
+}
+
+// emitAutoHeader emits header fields with auto-generated names.
+// First field is "pbtype" (or "cbtype"), field with the highest value that
+// could be a count is "nfaces" (or "numGroups").
+func emitAutoHeader(sb *strings.Builder, reads []mips.ReadEntry, headerLen int) {
+	// Name heuristics based on value and position
+	for i := 0; i < headerLen && i < len(reads); i++ {
+		r := reads[i]
+		name := fmt.Sprintf("h%d", i)
+
+		// First int32 after dictID is typically pbtype/cbtype
+		if i == 0 {
+			name = "pbtype"
+		}
+
+		switch r.Type {
+		case "int32":
+			if name == "pbtype" {
+				sb.WriteString(fmt.Sprintf("\tpbtype := ps2ri32(data, &pos)\n"))
+			} else {
+				sb.WriteString(fmt.Sprintf("\t%s := ps2ri32(data, &pos)\n", name))
+			}
+		case "uint32":
+			sb.WriteString(fmt.Sprintf("\t%s := ps2ru32(data, &pos)\n", name))
+		case "float32":
+			sb.WriteString(fmt.Sprintf("\t%s := ps2rf32(data, &pos)\n", name))
+		default:
+			sb.WriteString(fmt.Sprintf("\t_ = ps2ri32(data, &pos) // %s\n", r.Type))
+		}
+	}
+
+	// Find which header field is "nfaces" (the loop count) — largest small value
+	sb.WriteString("\t// nfaces/numGroups derived from header\n")
+	sb.WriteString(fmt.Sprintf("\tnfaces := h1 // auto: adjust if wrong field\n"))
+	sb.WriteString(fmt.Sprintf("\t_ = pbtype\n"))
+	for i := 2; i < headerLen; i++ {
+		sb.WriteString(fmt.Sprintf("\t_ = h%d\n", i))
+	}
+	sb.WriteString("\n")
 }
 
 func emitV0Body(sb *strings.Builder, reads []mips.ReadEntry) {
@@ -540,10 +620,31 @@ func emitVertexFromPattern(sb *strings.Builder, pattern []mips.ReadEntry, indent
 		if ri < len(remaining) && remaining[ri].Type == "int16" {
 			sb.WriteString(fmt.Sprintf("%sv.VGroup = ps2ri16(data, &pos)\n", indent))
 		}
+	} else if floats == 3 && len(pattern) == 3 {
+		// CollBuffer cbtype=0: 3×float position only
+		sb.WriteString(fmt.Sprintf("%sv.X = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Y = ps2rf32(data, &pos)\n", indent))
+		sb.WriteString(fmt.Sprintf("%sv.Z = ps2rf32(data, &pos)\n", indent))
 	} else {
-		// Unknown pattern — emit raw reads
-		for _, r := range pattern {
-			sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s\n", indent, r.Type))
+		// Generic: emit reads matching the exact trace types
+		fieldNames := []string{"X", "Y", "Z", "U", "V", "NX", "NY", "NZ", "R", "G", "B", "A"}
+		for i, r := range pattern {
+			fname := fmt.Sprintf("f%d", i)
+			if i < len(fieldNames) {
+				fname = fieldNames[i]
+			}
+			switch r.Type {
+			case "float32":
+				sb.WriteString(fmt.Sprintf("%sv.%s = ps2rf32(data, &pos)\n", indent, fname))
+			case "int16":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri16(data, &pos) // %s\n", indent, fname))
+			case "int8":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri8(data, &pos) // %s\n", indent, fname))
+			case "uint8":
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ru8(data, &pos) // %s\n", indent, fname))
+			default:
+				sb.WriteString(fmt.Sprintf("%s_ = ps2ri32(data, &pos) // %s %s\n", indent, r.Type, fname))
+			}
 		}
 	}
 }
