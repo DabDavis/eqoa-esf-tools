@@ -211,7 +211,7 @@ func detectVertexPattern(reads []mips.ReadEntry, headerLen int) (vertexReads []m
 			continue
 		}
 		vr, vc := findRepeat(reads[startIdx:])
-		if vc >= 2 {
+		if vc >= 3 {
 			return vr, vc
 		}
 	}
@@ -219,6 +219,8 @@ func detectVertexPattern(reads []mips.ReadEntry, headerLen int) (vertexReads []m
 }
 
 func findRepeat(after []mips.ReadEntry) ([]mips.ReadEntry, int) {
+	// Require at least 3 repetitions to avoid false positives
+	// (e.g., three int32s in a header aren't a vertex pattern)
 	if len(after) < 4 {
 		return nil, 0
 	}
@@ -248,7 +250,7 @@ func findRepeat(after []mips.ReadEntry) ([]mips.ReadEntry, int) {
 			}
 			matches++
 		}
-		if matches >= 2 {
+		if matches >= 3 {
 			return pattern, matches
 		}
 	}
@@ -339,20 +341,42 @@ type PS2Vertex struct {
 		sb.WriteString(fmt.Sprintf("\t// ver >= 1 (%d objects traced across all versions)\n", totalCount))
 		sb.WriteString("\tif ver > 1 {\n\t\t_ = ps2ru32(data, &pos) // dictID (ver >= 2 only)\n\t}\n")
 
-		// Auto-detect header length by finding where the vertex repeat starts.
-		// Use any trace to detect the pattern.
+		// Use type-specific header template (known from PS2 decompilation)
+		// then auto-detect vertex pattern from trace
 		var anyTrace *variantTrace
 		for _, vt := range pbtypeTraces {
 			anyTrace = vt
 			break
 		}
+		var headerLen int
 
-		// Find header length: everything before the first repeating pattern
-		headerLen := findHeaderLen(anyTrace.reads)
+		switch typ {
+		case 0x1200, 0x1210: // PrimBuffer / SkinPrimBuffer
+			sb.WriteString("\tpbtype := ps2ri32(data, &pos)\n")
+			sb.WriteString("\t_ = ps2ri32(data, &pos) // nmats\n")
+			sb.WriteString("\tnfaces := ps2ri32(data, &pos)\n")
+			sb.WriteString("\t_ = ps2ri32(data, &pos) // unk\n")
+			sb.WriteString("\tp1 := ps2ri32(data, &pos)\n")
+			sb.WriteString("\tp2 := ps2ri32(data, &pos)\n")
+			sb.WriteString("\tp3 := ps2ri32(data, &pos)\n")
+			sb.WriteString("\t_, _, _ = p1, p2, p3\n\n")
+			headerLen = 8 // dictID(already emitted) + 7 fields
 
-		// Emit header fields from the trace
-		sb.WriteString(fmt.Sprintf("\t// Header: %d fields (auto-detected from PS2 trace)\n", headerLen))
-		emitAutoHeader(&sb, anyTrace.reads, headerLen)
+		case 0x4200: // CollBuffer
+			sb.WriteString("\tcbtype := ps2ri32(data, &pos)\n")
+			sb.WriteString("\t_ = ps2ri32(data, &pos) // numPrimGroups\n")
+			sb.WriteString("\tnfaces := ps2ri32(data, &pos) // numVertexGroups\n")
+			sb.WriteString("\t_ = ps2ri32(data, &pos) // unk\n")
+			sb.WriteString("\tif ver >= 2 {\n\t\t_ = ps2ri32(data, &pos) // packing\n\t}\n")
+			sb.WriteString("\t_ = cbtype\n\n")
+			headerLen = 5 // cbtype + numPG + numVG + unk + packing
+
+		default:
+			// Auto-detect header
+			headerLen = findHeaderLen(anyTrace.reads)
+			sb.WriteString(fmt.Sprintf("\t// Header: %d fields (auto-detected)\n", headerLen))
+			emitAutoHeader(&sb, anyTrace.reads, headerLen)
+		}
 
 		// Sort pbtypes
 		var pbtypes []int32
@@ -530,7 +554,14 @@ func emitVertexLoop(sb *strings.Builder, reads []mips.ReadEntry, headerLen int, 
 
 	sb.WriteString(fmt.Sprintf("%sfor fi := int32(0); fi < nfaces; fi++ {\n", indent))
 	sb.WriteString(fmt.Sprintf("%s\tnverts := ps2ri32(data, &pos)\n", indent))
-	sb.WriteString(fmt.Sprintf("%s\t_ = ps2ri32(data, &pos) // mat\n", indent))
+	sb.WriteString(fmt.Sprintf("%s\t_ = ps2ri32(data, &pos) // mat/primg\n", indent))
+
+	// CollBuffer has an extra per-group read (list)
+	// Detect by checking if headerLen corresponds to CollBuffer (5) vs PrimBuffer (8)
+	if headerLen <= 6 {
+		sb.WriteString(fmt.Sprintf("%s\t_ = ps2ri32(data, &pos) // list (CollBuffer per-group)\n", indent))
+	}
+
 	sb.WriteString(fmt.Sprintf("%s\tfor vi := int32(0); vi < nverts; vi++ {\n", indent))
 
 	if pattern != nil {
