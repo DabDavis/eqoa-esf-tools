@@ -22,7 +22,8 @@ type ESFTreeStream struct {
 	current  *esf.ObjInfo // current object node
 	pos      int          // absolute read position in ESF data
 	stack    []treeFrame  // parent stack for ReadBegin/ReadEnd nesting
-	childIdx map[*esf.ObjInfo]int // next child index per parent
+	childIdx   map[*esf.ObjInfo]int // next child index per parent
+	rootOpened bool                 // true after first ReadBegin
 
 	Reads []ReadEntry // captured trace
 }
@@ -49,12 +50,11 @@ func NewESFTreeStream(file *esf.ObjFile, data []byte, startNode *esf.ObjInfo) *E
 // If we're at the root (startNode), the first ReadBegin opens the node itself.
 func (s *ESFTreeStream) ReadBegin() (typ uint16, ver uint16, size uint32) {
 	// First call: open the start node itself
-	if len(s.stack) == 0 && s.pos == int(s.current.Offset) {
+	if !s.rootOpened {
+		s.rootOpened = true
 		typ = s.current.Type
 		ver = uint16(s.current.Version)
 		size = uint32(s.current.Size)
-		// Go ObjInfo.Offset already points past the 12-byte header
-		// (type(2)+ver(2)+size(4)+numSubObjects(4)), so no skip needed.
 		s.pos = int(s.current.Offset)
 		s.Reads = append(s.Reads, ReadEntry{
 			Type:  "ReadBegin",

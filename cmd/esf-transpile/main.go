@@ -900,10 +900,16 @@ func PS2Parse%s(file *ObjFile, node *ObjInfo) error {
 		}
 
 		if len(childReads) > 0 {
-			sb.WriteString(fmt.Sprintf("\t\tdata := file.RawBytes(int(child%d.Offset)+8, int(child%d.Size))\n", childIdx, childIdx))
+			// Go ObjInfo.Offset already points past the 12-byte header
+			sb.WriteString(fmt.Sprintf("\t\tdata := file.RawBytes(int(child%d.Offset), int(child%d.Size))\n", childIdx, childIdx))
 			sb.WriteString("\t\tpos := 0\n")
+
+			// Use meaningful names based on child type
+			childTypeName := typeName(childType)
+			childFieldNames := inferHeaderNames(childTypeName, childReads)
+
 			for j, cr := range childReads {
-				fname := fmt.Sprintf("f%d", j)
+				fname := childFieldNames[j]
 				switch cr.Type {
 				case "uint32":
 					sb.WriteString(fmt.Sprintf("\t\t%s := ps2ru32(data, &pos)\n", fname))
@@ -919,10 +925,9 @@ func PS2Parse%s(file *ObjFile, node *ObjInfo) error {
 					sb.WriteString(fmt.Sprintf("\t\t%s := ps2ri8(data, &pos)\n", fname))
 				}
 			}
-			// Suppress unused variable warnings
 			sb.WriteString("\t\t_ = pos\n")
 			for j := range childReads {
-				sb.WriteString(fmt.Sprintf("\t\t_ = f%d\n", j))
+				sb.WriteString(fmt.Sprintf("\t\t_ = %s\n", childFieldNames[j]))
 			}
 		} else {
 			sb.WriteString("\t\t// No data reads (existence check only)\n")
@@ -1009,10 +1014,24 @@ func emitFlatReads(sb *strings.Builder, reads []mips.ReadEntry, name, indent str
 	}
 
 found:
-	// Emit header reads
+	// Name header fields based on type and position
+	headerNames := inferHeaderNames(name, reads[:headerLen])
+
+	// Find which header field is the loop count
+	loopCountField := ""
+	loopCountIdx := -1
+	for i, n := range headerNames {
+		if n == "numNodes" || n == "nfaces" || n == "numVertexGroups" || n == "count" {
+			loopCountField = n
+			loopCountIdx = i
+			break
+		}
+	}
+
+	// Emit header reads with meaningful names
 	for i := 0; i < headerLen && i < len(reads); i++ {
 		r := reads[i]
-		fname := fmt.Sprintf("h%d", i)
+		fname := headerNames[i]
 		switch r.Type {
 		case "uint32":
 			sb.WriteString(fmt.Sprintf("%s%s := ps2ru32(data, &pos)\n", indent, fname))
@@ -1027,19 +1046,24 @@ found:
 		}
 	}
 
-	// Suppress unused header vars
+	// Suppress unused header vars (except loop count)
 	for i := 0; i < headerLen; i++ {
-		sb.WriteString(fmt.Sprintf("%s_ = h%d\n", indent, i))
+		if i != loopCountIdx {
+			sb.WriteString(fmt.Sprintf("%s_ = %s\n", indent, headerNames[i]))
+		}
 	}
 
 	if pattern != nil && patternCount >= 3 {
-		// Calculate how many iterations
 		totalAfterHeader := len(reads) - headerLen
 		iterations := totalAfterHeader / len(pattern)
 
 		sb.WriteString(fmt.Sprintf("\n%s// Repeating pattern: %d reads × %d iterations\n",
 			indent, len(pattern), iterations))
-		sb.WriteString(fmt.Sprintf("%sfor i := 0; i < %d; i++ {\n", indent, iterations))
+		if loopCountField != "" {
+			sb.WriteString(fmt.Sprintf("%sfor i := int32(0); i < %s; i++ {\n", indent, loopCountField))
+		} else {
+			sb.WriteString(fmt.Sprintf("%sfor i := 0; i < %d; i++ {\n", indent, iterations))
+		}
 
 		// Emit pattern reads
 		for j, r := range pattern {
@@ -1102,6 +1126,80 @@ found:
 			}
 		}
 	}
+}
+
+// inferHeaderNames assigns meaningful names to header fields based on
+// parser type and field types/positions. Uses knowledge from PS2 decompilation.
+func inferHeaderNames(parserName string, headerReads []mips.ReadEntry) []string {
+	names := make([]string, len(headerReads))
+	for i := range names {
+		names[i] = fmt.Sprintf("h%d", i)
+	}
+
+	switch parserName {
+	case "HSpriteAnim":
+		// PS2 ParseHSpriteAnimObj header (ver=3):
+		// dictID(u32), format(i32), numNodes(i32), numFrames(i32),
+		// numKeyframes(i32), fps(f32), playSpeed(f32), playbackType(i32)
+		fieldNames := []string{"dictID", "format", "numNodes", "numFrames",
+			"numKeyframes", "fps", "playSpeed", "playbackType"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+
+	case "CSprite":
+		// PS2 ParseCSpriteObj header (0x2710 child):
+		// dictID(u32), bboxMinX..bboxMaxZ(6×f32), skelType(i32),
+		// defaultScale(f32), race(i32), sex(i32), extraFlag(i32)
+		fieldNames := []string{"dictID", "bboxMinX", "bboxMinY", "bboxMinZ",
+			"bboxMaxX", "bboxMaxY", "bboxMaxZ", "skelType",
+			"defaultScale", "race", "sex", "extraFlag"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+
+	case "SimpleSprite":
+		fieldNames := []string{"dictID", "bboxMinX", "bboxMinY", "bboxMinZ",
+			"bboxMaxX", "bboxMaxY", "bboxMaxZ"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+
+	case "PrimBuffer":
+		fieldNames := []string{"dictID", "pbtype", "nmats", "nfaces",
+			"unk", "p1", "p2", "p3"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+
+	case "CollBuffer":
+		fieldNames := []string{"cbtype", "numPrimGroups", "numVertexGroups",
+			"unk", "packing"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+
+	case "ParticleDefinition":
+		fieldNames := []string{"dictID", "blendMode", "zWrite", "zTest",
+			"texConfig", "numMotifs"}
+		for i, n := range fieldNames {
+			if i < len(names) {
+				names[i] = n
+			}
+		}
+	}
+
+	return names
 }
 
 func typeName(t uint16) string {
