@@ -30,7 +30,9 @@ var parsers = []struct {
 	GoFile  string
 }{
 	{0x1200, 0x004320B8, "ParsePrimBuffer", "pkg/esf/primbuffer.go"},
-	{0x4200, 0x00434610, "ParseCollBuffer", "pkg/esf/collbuffer.go"},
+	{0x1210, 0x00432F98, "ParseSkinPrimBuffer", "pkg/esf/primbuffer.go"},
+	{0x1230, 0x00433E48, "ParseFloraPrimBuffer", "pkg/esf/primbuffer.go"},
+	{0x4200, 0x004343D8, "ParseCollBuffer", "pkg/esf/collbuffer.go"},
 }
 
 func parserForType(typ uint16) (uint32, string, string) {
@@ -71,6 +73,8 @@ func goTraceFromRaw(data []byte, typ uint16) []mips.ReadEntry {
 	switch typ {
 	case 0x1200:
 		return goTracePrimBuffer(data)
+	case 0x1210:
+		return goTraceSkinPrimBuffer(data)
 	case 0x4200:
 		return goTraceCollBuffer(data)
 	default:
@@ -140,6 +144,59 @@ func goTracePrimBuffer(data []byte) []mips.ReadEntry {
 				r.ru8("r"); r.ru8("g"); r.ru8("b"); r.ru8("a")
 				r.rs16("vgroup")
 			}
+		}
+	}
+	return r.trace
+}
+
+// goTraceSkinPrimBuffer replays SkinPrimBuffer reads (type 0x1210, pbtype=5).
+// PS2: ParseSkinPrimBuffer at 0x00432F98 → ParseSkinPrimBufferObjV0 at 0x00433AE0.
+func goTraceSkinPrimBuffer(data []byte) []mips.ReadEntry {
+	r := &traceReader{data: data}
+	r.readBegin()
+	ver := binary.LittleEndian.Uint16(data[2:])
+
+	if ver == 0 {
+		// SkinPrimBufferObjV0 — same as PrimBuffer v0 but with vgroup
+		r.ri32("nmats")
+		nfaces := r.ri32v("nfaces")
+		r.ri32("unk")
+		for fi := 0; fi < int(nfaces) && !r.eof(); fi++ {
+			nverts := r.ri32v("nverts")
+			r.ri32("mat")
+			for j := 0; j < int(nverts) && !r.eof(); j++ {
+				for k := 0; k < 8; k++ {
+					r.rf32("float")
+				}
+				r.ru8("r"); r.ru8("g"); r.ru8("b"); r.ru8("a")
+				r.rs16("vgroup")
+			}
+		}
+		return r.trace
+	}
+
+	// ver > 0: same header as PrimBuffer
+	if ver > 1 {
+		r.ru32("dictID")
+	}
+	r.ri32("pbtype") // always 5 for SkinPrimBuffer
+	r.ri32("nmats")
+	nfaces := r.ri32v("nfaces")
+	r.ri32("unk")
+	r.ri32("p1")
+	r.ri32("p2")
+	r.ri32("p3")
+
+	for fi := int32(0); fi < nfaces && !r.eof(); fi++ {
+		nverts := r.ri32v("nverts")
+		r.ri32("mat")
+		for j := int32(0); j < nverts && !r.eof(); j++ {
+			// Skinned: pos(3×i16) + uv(2×i16) + normal(3×i8) + color(4×u8) + vgroup(i16)
+			r.rs16("x"); r.rs16("y"); r.rs16("z")
+			r.rs16("u"); r.rs16("v")
+			r.ri8("nx"); r.ri8("ny"); r.ri8("nz")
+			r.ru8("r"); r.ru8("g"); r.ru8("b"); r.ru8("a")
+			r.rs16("vgroup")
 		}
 	}
 	return r.trace

@@ -51,6 +51,16 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
+	// VIDictionary::Find — return "not found" (non-zero) so parsers skip
+	// dictionary registration and go straight to object creation.
+	// PS2 parsers check: if (Find() == 0) { check type == 11; } else { CreatePrimBuffer(); }
+	// Returning non-zero takes the "not found" path which skips the type assertion.
+	if target == 0x003E4318 {
+		m.wReg32(2, 1) // return 1 = not found
+		m.Intercepted++
+		return true
+	}
+
 	// All other known SUPPORT functions → stub (return 0)
 	if target >= 0x003E3D00 && target < 0x00559F14 {
 		m.wReg32(2, 0) // $v0 = 0
@@ -204,7 +214,11 @@ func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadE
 	for i := uint32(0); i < 512; i++ {
 		interp.Store8At(thisAddr+i, 0)
 	}
-	interp.Store32At(thisAddr+0x24, 0x01FD0000) // objFile ptr (non-null)
+	interp.Store32At(thisAddr+0x04, 0x01FC0000) // VIScene* (non-null stub)
+	interp.Store32At(thisAddr+0x0C, 0x01FB0000) // VIRaster* (non-null — CreatePrimBuffer needs this)
+	interp.Store32At(thisAddr+0x18, 0x01FA0000) // VIParticleSystem* (non-null stub)
+	interp.Store32At(thisAddr+0x20, 0x01F90000) // VIDictionary* (non-null stub)
+	interp.Store32At(thisAddr+0x24, 0x01FD0000) // VIObjFile* (non-null, Read* intercepted)
 
 	result := interp.Run(parserAddr, esf, thisAddr)
 	return result, esf.Reads

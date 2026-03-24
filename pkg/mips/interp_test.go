@@ -136,3 +136,100 @@ func TestParsePrimBuffer_TUNARIA(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCollBuffer_TUNARIA(t *testing.T) {
+	eeDump := loadEE(t)
+
+	isoPath := "/home/sdg/claude-eqoa/EverQuest - Online Adventures - Frontiers (USA).iso"
+	f, err := os.Open(isoPath)
+	if err != nil {
+		t.Skipf("ISO not found: %v", err)
+	}
+	defer f.Close()
+
+	chunk := make([]byte, 50*1024*1024)
+	f.ReadAt(chunk, int64(520000*2048))
+
+	target := []byte{0x00, 0x42} // 0x4200 LE
+	var offsets []struct{ offset, size int }
+	for i := 0; i+8 < len(chunk) && len(offsets) < 5; i++ {
+		if chunk[i] != target[0] || chunk[i+1] != target[1] {
+			continue
+		}
+		ver := binary.LittleEndian.Uint16(chunk[i+2:])
+		size := binary.LittleEndian.Uint32(chunk[i+4:])
+		if ver <= 2 && size > 8 && size < 200000 && i+8+int(size) <= len(chunk) {
+			offsets = append(offsets, struct{ offset, size int }{i, int(size)})
+			i += 8 + int(size) - 1
+		}
+	}
+	if len(offsets) == 0 {
+		t.Fatal("No CollBuffers found")
+	}
+	t.Logf("Found %d CollBuffers", len(offsets))
+
+	for i, cb := range offsets {
+		objData := chunk[cb.offset : cb.offset+8+cb.size]
+		result, reads := RunParser(eeDump, 0x004343D8, objData)
+		dataReads := 0
+		for _, r := range reads {
+			if r.Type != "ReadBegin" && r.Type != "ReadEnd" {
+				dataReads++
+			}
+		}
+		ver := binary.LittleEndian.Uint16(objData[2:])
+		t.Logf("[%d] @0x%06X ver=%d size=%d → result=%d, %d data reads",
+			i, cb.offset, ver, cb.size, result, dataReads)
+		if result < 0 {
+			t.Errorf("[%d] ParseCollBuffer returned error: %d", i, result)
+		}
+	}
+}
+
+func TestParseSkinPrimBuffer_CHAR(t *testing.T) {
+	eeDump := loadEE(t)
+
+	charData, err := os.ReadFile("/home/sdg/claude-eqoa/extracted-assets/CHAR.ESF")
+	if err != nil {
+		t.Skipf("CHAR.ESF not found: %v", err)
+	}
+
+	target := []byte{0x10, 0x12} // 0x1210 LE
+	var offsets []struct{ offset, size int }
+	for i := 0; i+8 < len(charData) && len(offsets) < 5; i++ {
+		if charData[i] != target[0] || charData[i+1] != target[1] {
+			continue
+		}
+		ver := binary.LittleEndian.Uint16(charData[i+2:])
+		size := binary.LittleEndian.Uint32(charData[i+4:])
+		if ver <= 5 && size > 100 && size < 100000 && i+8+int(size) <= len(charData) {
+			offsets = append(offsets, struct{ offset, size int }{i, int(size)})
+			i += 8 + int(size) - 1
+		}
+	}
+	if len(offsets) == 0 {
+		t.Fatal("No SkinPrimBuffers found")
+	}
+	t.Logf("Found %d SkinPrimBuffers", len(offsets))
+
+	for i, spb := range offsets {
+		objData := charData[spb.offset : spb.offset+8+spb.size]
+		result, reads := RunParser(eeDump, 0x00432F98, objData)
+		dataReads := 0
+		for _, r := range reads {
+			if r.Type != "ReadBegin" && r.Type != "ReadEnd" {
+				dataReads++
+			}
+		}
+		ver := binary.LittleEndian.Uint16(objData[2:])
+		t.Logf("[%d] @0x%06X ver=%d size=%d → result=%d, %d data reads",
+			i, spb.offset, ver, spb.size, result, dataReads)
+		if result < 0 {
+			t.Errorf("[%d] ParseSkinPrimBuffer returned error: %d", i, result)
+			for j, r := range reads {
+				if j >= 15 { break }
+				t.Logf("  [%d] %s val=%d pos=0x%X", j, r.Type, r.IVal, r.Pos)
+			}
+		}
+	}
+}
