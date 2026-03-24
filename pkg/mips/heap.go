@@ -10,13 +10,25 @@ package mips
 
 const (
 	heapBase = uint32(0x01E00000)
-	heapSize = uint32(0x00100000) // 1MB
+	heapSize = uint32(0x00400000) // 4MB
 )
 
 // heapState tracks the simple bump allocator.
 type heapState struct {
 	nextAddr uint32
 }
+
+// HeapAllocExported is the exported version of heapAlloc.
+func (m *Interp) HeapAllocExported(size uint32) uint32 { return m.heapAlloc(size) }
+
+// Load32At reads a 32-bit value from memory (exported).
+func (m *Interp) Load32At(addr uint32) uint32 { return m.load32(addr) }
+
+// Regs returns the register file for inspection.
+func (m *Interp) Regs() [32]int64 { return m.regs }
+
+// GetPC returns the current program counter.
+func (m *Interp) GetPC() uint32 { return m.pc }
 
 // heapAlloc allocates n bytes from the PS2 heap, zeroed.
 // Returns the address of the allocated block.

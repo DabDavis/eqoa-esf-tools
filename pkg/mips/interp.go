@@ -32,6 +32,8 @@ type Interp struct {
 	// PS2 runtime state (heap + fake objects)
 	heap    heapState
 	runtime runtimeState
+	vu0          vu0State     // VU0 vector unit (128-bit SIMD)
+	packetStream *PacketStream // CLIENT opcode packet data (nil for ESF mode)
 
 	// Debug (ported from PCSX2 DebugTools)
 	breakpoints      []Breakpoint
@@ -45,7 +47,7 @@ func New(eeDump []byte) *Interp {
 	return &Interp{
 		code:     eeDump,
 		writes:   make(map[uint32]byte, 4096),
-		MaxSteps: 1_000_000,
+		MaxSteps: 10_000_000,
 	}
 }
 
@@ -90,6 +92,9 @@ func (m *Interp) Run(entryAddr uint32, esf *ESFStream, args ...uint32) int32 {
 
 	for m.Steps < m.MaxSteps {
 		if m.pc == 0 {
+			if m.Verbose {
+				fmt.Printf("PC=0 sentinel at step %d, $ra=0x%08X, $v0=%d, prev_pc was set by jr instruction\n", m.Steps, uint32(m.regs[31]), int32(m.regs[2]))
+			}
 			break
 		}
 		// PCSX2-style breakpoint check (before instruction execution)
@@ -106,8 +111,45 @@ func (m *Interp) Run(entryAddr uint32, esf *ESFStream, args ...uint32) int32 {
 		m.Steps++
 	}
 
-	v0 := int32(m.regs[2])
-	return v0
+	return int32(m.regs[2])
+}
+
+// RunCall executes a function without resetting interpreter state.
+// Used for calling Init functions during setup.
+// Steps used by RunCall do NOT count toward the main Run's step limit.
+func (m *Interp) RunCall(funcAddr uint32, args ...uint32) int32 {
+	oldPC := m.pc
+	oldRA := m.regs[31]
+	oldSteps := m.Steps
+
+	m.pc = funcAddr
+	m.wReg(31, 0) // sentinel
+	m.wReg(29, 0x01FE0000-0x1000) // separate stack for RunCall (below thisAddr)
+
+	argRegs := []int{4, 5, 6, 7, 8, 9}
+	for i, v := range args {
+		if i < len(argRegs) {
+			m.wReg(argRegs[i], int64(v))
+		}
+	}
+
+	for i := 0; i < 1000000; i++ {
+		if m.pc == 0 {
+			break
+		}
+		insn := m.load32(m.pc)
+		if !m.exec(insn) {
+			break
+		}
+	}
+
+	result := int32(m.regs[2])
+
+	m.pc = oldPC
+	m.regs[31] = oldRA
+	m.Steps = oldSteps // don't count Init steps against main Run limit
+
+	return result
 }
 
 // --- Register access ---
@@ -338,6 +380,10 @@ func (m *Interp) exec(insn uint32) bool {
 	case 17:
 		return m.execCOP1(insn, rs, rt, rd, sa, funct, next)
 
+	// COP2 (VU0 macro mode)
+	case 18:
+		return m.execCOP2(insn, next)
+
 	// Loads
 	case 32: // LB
 		addr := uint32(m.rReg32(rs) + simm)
@@ -439,6 +485,25 @@ func (m *Interp) exec(insn uint32) bool {
 		m.pc = next
 		return true
 
+	// VU0 128-bit memory operations (top-level opcodes, NOT inside COP2)
+	case 54: // LQC2 — Load Quadword to COP2: VF[ft] = mem128[GPR[rs]+imm]
+		addr := uint32(m.rReg32(rs)+simm) & ^uint32(0xF) // 16-byte aligned
+		m.vu0.vf[rt][0] = math.Float32frombits(m.load32(addr))
+		m.vu0.vf[rt][1] = math.Float32frombits(m.load32(addr + 4))
+		m.vu0.vf[rt][2] = math.Float32frombits(m.load32(addr + 8))
+		m.vu0.vf[rt][3] = math.Float32frombits(m.load32(addr + 12))
+		if rt == 0 { m.vu0.vf[0] = [4]float32{0, 0, 0, 1.0} } // VF0 constant
+		m.pc = next
+		return true
+	case 62: // SQC2 — Store Quadword from COP2: mem128[GPR[rs]+imm] = VF[ft]
+		addr := uint32(m.rReg32(rs)+simm) & ^uint32(0xF) // 16-byte aligned
+		m.store32(addr, math.Float32bits(m.vu0.vf[rt][0]))
+		m.store32(addr+4, math.Float32bits(m.vu0.vf[rt][1]))
+		m.store32(addr+8, math.Float32bits(m.vu0.vf[rt][2]))
+		m.store32(addr+12, math.Float32bits(m.vu0.vf[rt][3]))
+		m.pc = next
+		return true
+
 	// LWL/LWR (unaligned load — from PCSX2 R5900OpcodeImpl.cpp)
 	case 34: // LWL
 		addr := uint32(m.rReg32(rs) + simm)
@@ -482,6 +547,79 @@ func (m *Interp) exec(insn uint32) bool {
 		swrShift := [4]uint32{0, 8, 16, 24}
 		result := (mem & swrMask[shift]) | (uint32(m.rReg(rt)) << swrShift[shift])
 		m.store32(addr&^uint32(3), result)
+		m.pc = next
+		return true
+
+	// 64-bit unaligned load/store (LDL/LDR/SDL/SDR)
+	// Used by VIMap for copying dictionary entries (8-byte key+value pairs).
+	// Similar to LWL/LWR but for doublewords.
+	// 64-bit unaligned load/store — from PCSX2 R5900OpcodeImpl.cpp (little-endian)
+	case 26: // LDL: rt = (rt & LDL_MASK[shift]) | (mem << LDL_SHIFT[shift])
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 7
+		aligned := addr & ^uint32(7)
+		lo := uint64(m.load32(aligned))
+		hi := uint64(m.load32(aligned + 4))
+		mem := (hi << 32) | lo
+		reg := uint64(m.rReg(rt))
+		ldlShift := [8]uint{56, 48, 40, 32, 24, 16, 8, 0}
+		ldlMask := [8]uint64{
+			0x00FFFFFFFFFFFFFF, 0x0000FFFFFFFFFFFF, 0x000000FFFFFFFFFF, 0x00000000FFFFFFFF,
+			0x0000000000FFFFFF, 0x000000000000FFFF, 0x00000000000000FF, 0x0000000000000000,
+		}
+		m.wReg(rt, int64((reg&ldlMask[shift])|(mem<<ldlShift[shift])))
+		m.pc = next
+		return true
+	case 27: // LDR: rt = (rt & LDR_MASK[shift]) | (mem >> LDR_SHIFT[shift])
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 7
+		aligned := addr & ^uint32(7)
+		lo := uint64(m.load32(aligned))
+		hi := uint64(m.load32(aligned + 4))
+		mem := (hi << 32) | lo
+		reg := uint64(m.rReg(rt))
+		ldrShift := [8]uint{0, 8, 16, 24, 32, 40, 48, 56}
+		ldrMask := [8]uint64{
+			0x0000000000000000, 0xFF00000000000000, 0xFFFF000000000000, 0xFFFFFF0000000000,
+			0xFFFFFFFF00000000, 0xFFFFFFFFFF000000, 0xFFFFFFFFFFFF0000, 0xFFFFFFFFFFFFFF00,
+		}
+		m.wReg(rt, int64((reg&ldrMask[shift])|(mem>>ldrShift[shift])))
+		m.pc = next
+		return true
+	case 44: // SDL — from PCSX2: mem = (reg >> SDL_SHIFT) | (mem & SDL_MASK)
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 7
+		aligned := addr & ^uint32(7)
+		lo := uint64(m.load32(aligned))
+		hi := uint64(m.load32(aligned + 4))
+		mem := (hi << 32) | lo
+		reg := uint64(m.rReg(rt))
+		sdlShift := [8]uint{56, 48, 40, 32, 24, 16, 8, 0}
+		sdlMask := [8]uint64{
+			0xFFFFFFFFFFFFFF00, 0xFFFFFFFFFFFF0000, 0xFFFFFFFFFF000000, 0xFFFFFFFF00000000,
+			0xFFFFFF0000000000, 0xFFFF000000000000, 0xFF00000000000000, 0x0000000000000000,
+		}
+		result64 := (reg >> sdlShift[shift]) | (mem & sdlMask[shift])
+		m.store32(aligned, uint32(result64))
+		m.store32(aligned+4, uint32(result64>>32))
+		m.pc = next
+		return true
+	case 45: // SDR — from PCSX2: mem = (reg << SDR_SHIFT) | (mem & SDR_MASK)
+		addr := uint32(m.rReg32(rs) + simm)
+		shift := addr & 7
+		aligned := addr & ^uint32(7)
+		lo := uint64(m.load32(aligned))
+		hi := uint64(m.load32(aligned + 4))
+		mem := (hi << 32) | lo
+		reg := uint64(m.rReg(rt))
+		sdrShift := [8]uint{0, 8, 16, 24, 32, 40, 48, 56}
+		sdrMask := [8]uint64{
+			0x0000000000000000, 0x00000000000000FF, 0x000000000000FFFF, 0x0000000000FFFFFF,
+			0x00000000FFFFFFFF, 0x000000FFFFFFFFFF, 0x0000FFFFFFFFFFFF, 0x00FFFFFFFFFFFFFF,
+		}
+		result64 := (reg << sdrShift[shift]) | (mem & sdrMask[shift])
+		m.store32(aligned, uint32(result64))
+		m.store32(aligned+4, uint32(result64>>32))
 		m.pc = next
 		return true
 	}
@@ -533,18 +671,24 @@ func (m *Interp) execSpecial(rs, rt, rd, sa int, funct uint32, next uint32) bool
 		m.wReg(rd, m.hi)
 	case 18: // MFLO
 		m.wReg(rd, m.lo)
-	case 24: // MULT
+	case 24: // MULT — R5900: 3-operand form writes low result to rd
 		a := int64(int32(m.rReg(rs)))
 		b := int64(int32(m.rReg(rt)))
 		r := a * b
 		m.lo = r & 0xFFFFFFFF
 		m.hi = (r >> 32) & 0xFFFFFFFF
-	case 25: // MULTU
+		if rd != 0 {
+			m.wReg32(rd, m.lo) // R5900 extension: rd = LO
+		}
+	case 25: // MULTU — R5900: 3-operand form writes low result to rd
 		a := uint64(uint32(m.rReg(rs)))
 		b := uint64(uint32(m.rReg(rt)))
 		r := a * b
 		m.lo = int64(r & 0xFFFFFFFF)
 		m.hi = int64((r >> 32) & 0xFFFFFFFF)
+		if rd != 0 {
+			m.wReg32(rd, m.lo) // R5900 extension: rd = LO
+		}
 	case 26: // DIV
 		a := int32(m.rReg(rs))
 		b := int32(m.rReg(rt))
@@ -604,6 +748,22 @@ func (m *Interp) execRegimm(rs, rt int, simm int64, next uint32) bool {
 			m.pc = uint32(int64(next) + (simm << 2))
 		} else {
 			m.execDelay(next)
+			m.pc = next + 4
+		}
+	case 2: // BLTZL (likely)
+		if val < 0 {
+			m.execDelay(next)
+			m.pc = uint32(int64(next) + (simm << 2))
+		} else {
+			// Likely: delay slot nullified (NOT executed)
+			m.pc = next + 4
+		}
+	case 3: // BGEZL (likely)
+		if val >= 0 {
+			m.execDelay(next)
+			m.pc = uint32(int64(next) + (simm << 2))
+		} else {
+			// Likely: delay slot nullified (NOT executed)
 			m.pc = next + 4
 		}
 	default:

@@ -69,26 +69,19 @@ type runtimeState struct {
 // Known PS2 runtime function addresses and their Go handlers.
 // These functions are intercepted by handleJAL and routed to Go.
 var runtimeFuncs = map[uint32]string{
-	// VIDictionary
+	// VIDictionary — Go FakeDictionary for reliable Find/Add.
+	// Native VIMap works in isolation but fails in deep parser call chains
+	// due to an unresolved register/memory interaction bug.
 	0x003E4318: "Dictionary_Find",
+	0x003E43A8: "Dictionary_FindTyped",
 	0x003E42D8: "Dictionary_Add",
-
-	// VIScene object creation (return indices)
-	0x00463B90: "Scene_CreateAnimation",
-	0x00463CE8: "Scene_CreateRefMap",
-
-	// VIScene object access (return fake pointers from heap)
-	0x00463C00: "Scene_Animation",
-	0x00463D78: "Scene_RefMap",
-	0x00463C78: "Scene_ShareAnimation",
-
-	// VIRaster object creation
-	0x00403220: "Raster_CreatePrimBuffer",
-	0x004032A0: "Raster_PrimBuffer",
 }
 
 // handleRuntime processes a PS2 runtime function call.
 // Returns true if the function was handled, false if not recognized.
+// With Tier 2 native execution, all runtime objects (VIDictionary, VIScene,
+// VIRaster) run as native MIPS code. This function only fires for entries
+// in runtimeFuncs, which is now empty.
 func (m *Interp) handleRuntime(target uint32) bool {
 	name, ok := runtimeFuncs[target]
 	if !ok {
@@ -98,54 +91,83 @@ func (m *Interp) handleRuntime(target uint32) bool {
 	switch name {
 	case "Dictionary_Find":
 		// Find(dict, dictID, &resourceType, &index)
-		// During parsing, objects haven't been registered yet → return "not found"
+		// Smart return: check if the caller's beq-on-zero leads to an error
+		// return (SkinList) or a create path (CSprite/HSprite main parser).
 		dictID := uint32(m.rReg(5))
-		_ = dictID
+		a2 := uint32(m.rReg(6))
+		a3 := uint32(m.rReg(7))
 
-		// During ESF parsing, Find should ALWAYS return 0 (found = "proceed
-		// with parsing"). The "not found" path (return non-zero) is for
-		// duplicate detection — "this DictID already exists, skip creation."
-		// Since we're parsing fresh, nothing exists yet → always "found"
-		// means "first time seeing this, create it."
-		//
-		// PS2 behavior: Find returns 0 → beq taken → goto create path.
-		m.wReg32(2, 0) // return 0 = proceed with creation
+		if dictID != 0 {
+			if found, resType, idx := m.runtime.dict.Find(dictID); found {
+				if a2 != 0 { m.store16(a2, resType) }
+				if a3 != 0 { m.store32(a3, uint32(idx)) }
+				m.wReg32(2, 1)
+				m.Intercepted++
+				return true
+			}
+			// Not in dict. Check caller's branch pattern:
+			// beq $v0,$zero → TARGET. If TARGET is error return, return "found".
+			// If TARGET is create path, return "not found".
+			ra := uint32(m.rReg(31))
+			wantFound := false
+			if ra > 0 && ra+12 < uint32(len(m.code)) {
+				for scan := uint32(0); scan <= 4; scan += 4 {
+					insn := m.load32(ra + scan)
+					op := (insn >> 26) & 0x3F
+					rs := (insn >> 21) & 0x1F
+					rt := (insn >> 16) & 0x1F
+					if op == 4 && rs == 2 && rt == 0 { // BEQ $v0, $zero
+						imm := int16(insn & 0xFFFF)
+						target := (ra + scan) + 4 + uint32(imm<<2)
+						if target+8 < uint32(len(m.code)) {
+							tInsn := m.load32(target)
+							tOp := (tInsn >> 26) & 0x3F
+							tRt := (tInsn >> 16) & 0x1F
+							// LQ $ra = epilogue → error path
+							if tOp == 0x1E && tRt == 31 { wantFound = true }
+							// b OFFSET; li $v0,-1 = error path
+							tInsn2 := m.load32(target + 4)
+							if tInsn2 == 0x2402FFFF { wantFound = true }
+						}
+						break
+					}
+				}
+			}
+			if wantFound {
+				expectedType := m.peekExpectedType()
+				if a2 != 0 && expectedType != 0 { m.store16(a2, expectedType) }
+				if a3 != 0 { m.store32(a3, 0) }
+				m.wReg32(2, 1) // "found" → avoid error
+			} else {
+				m.wReg32(2, 0) // "not found" → create path
+			}
+		} else {
+			m.wReg32(2, 0)
+		}
+
+	case "Dictionary_FindTyped":
+		// Always return "found" for non-zero dictIDs. Skip-stubbed parsers
+		// (SpriteArray, MaterialPal) don't Add their objects to the dict,
+		// but reference parsers (SkinList, Attachments) need them to exist.
+		dictID := uint32(m.rReg(5))
+		a3 := uint32(m.rReg(7))
+		if dictID != 0 {
+			if found, _, idx := m.runtime.dict.Find(dictID); found {
+				if a3 != 0 { m.store32(a3, uint32(idx)) }
+			} else {
+				if a3 != 0 { m.store32(a3, 0) } // fake index
+			}
+			m.wReg32(2, 1) // always "found"
+		} else {
+			m.wReg32(2, 0) // dictID=0 → not found
+		}
 
 	case "Dictionary_Add":
-		// Add(dict, resource, dictID, resourceType, index)
 		dictID := uint32(m.rReg(6))
 		resType := uint16(m.rReg(7))
 		idx := int32(m.rReg(8))
 		m.runtime.dict.Add(dictID, resType, idx)
 		m.wReg32(2, 0)
-
-	case "Scene_CreateAnimation":
-		idx := m.runtime.scene.CreateAnimation()
-		m.wReg32(2, int64(idx))
-
-	case "Scene_CreateRefMap":
-		idx := m.runtime.scene.CreateRefMap()
-		m.wReg32(2, int64(idx))
-
-	case "Scene_Animation":
-		// Return a heap-allocated fake object pointer
-		addr := m.heapAlloc(256) // enough for VIHSpriteAnim struct
-		m.wReg32(2, int64(addr))
-
-	case "Scene_RefMap":
-		addr := m.heapAlloc(256)
-		m.wReg32(2, int64(addr))
-
-	case "Scene_ShareAnimation":
-		m.wReg32(2, 0) // no-op (reference counting)
-
-	case "Raster_CreatePrimBuffer":
-		idx := m.runtime.raster.CreatePrimBuffer()
-		m.wReg32(2, int64(idx))
-
-	case "Raster_PrimBuffer":
-		addr := m.heapAlloc(512) // enough for VIPrimBuffer struct
-		m.wReg32(2, int64(addr))
 
 	default:
 		return false

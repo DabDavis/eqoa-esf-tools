@@ -213,23 +213,46 @@ func RunParserTree(eeDump []byte, parserAddr uint32, file *esf.ObjFile, data []b
 	// then dispatches to the type-specific parser. We pre-call ReadBegin.
 	stream.ReadBegin()
 
-	// Zero fake pointer regions to prevent stale EE dump data from
-	// causing incorrect branch decisions in the PS2 parser.
-	zeroFakePointers(interp)
-
-	// Set up VIESFParse context
-	thisAddr := uint32(0x01FE0000)
-	for i := uint32(0); i < 512; i++ {
-		interp.Store8At(thisAddr+i, 0)
-	}
-	interp.Store32At(thisAddr+0x0C, 0x01FB0000) // VIRaster*
-	interp.Store32At(thisAddr+0x18, 0x01FA0000) // VIParticleSystem*
-	interp.Store32At(thisAddr+0x20, 0x01F90000) // VIDictionary*
-	interp.Store32At(thisAddr+0x24, 0x01FD0000) // VIObjFile*
-
-	// Use the tree stream as the ESF reader
+	thisAddr := setupVIESFParse(interp)
 	interp.Reader = stream
-
 	result := interp.Run(parserAddr, nil, thisAddr)
 	return result, stream.Reads
+}
+
+// prePopulateDict walks the ESF tree and calls Dictionary::Add for each node
+// with a non-zero DictID. This ensures Find returns correct results for
+// duplicate DictIDs without relying on native VIMap Insert correctness.
+func prePopulateDict(interp *Interp, dictAddr uint32, root *esf.ObjInfo) {
+	// ESF type → VIDictionary resource type mapping (from PS2 ParseObject dispatch)
+	typeMap := map[uint16]uint32{
+		0x1000: 1,  // Surface
+		0x1110: 2,  // MaterialPalette
+		0x1200: 3,  // PrimBuffer
+		0x2000: 4,  // SimpleSprite
+		0x2200: 5,  // HSprite
+		0x2600: 6,  // HSpriteAnim
+		0x2700: 9,  // CSprite
+		0x4200: 10, // CollBuffer
+		0x5000: 11, // RefMap
+	}
+
+	idx := int32(0)
+	var walk func(n *esf.ObjInfo)
+	walk = func(n *esf.ObjInfo) {
+		if n.DictID != 0 {
+			resType, ok := typeMap[n.Type]
+			if !ok {
+				resType = 0
+			}
+			// Create a fake resource object on heap for the Add call
+			fakeRes := interp.heapAlloc(64)
+			// Call Dictionary::Add(dict, resource, dictID, resourceType, index)
+			interp.RunCall(0x003E42D8, dictAddr, fakeRes, uint32(n.DictID), resType, uint32(idx))
+			idx++
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(root)
 }

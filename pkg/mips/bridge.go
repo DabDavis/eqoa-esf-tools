@@ -4,39 +4,26 @@ import "math"
 
 // ESF bridge: intercepts JAL calls to known VIObjFile Read* functions
 // and routes them through the ESFStream instead of executing MIPS code.
+//
+// TIER 2 DESIGN: Default to native execution.
+// The EE dump contains ALL SUPPORT module code. Every function can execute
+// natively. We only intercept functions that:
+//   1. Read ESF data (must route through our Go ESF stream)
+//   2. Access PS2 hardware (VIRaster GPU, GS registers — can't execute)
+//   3. Manage runtime objects (VIDictionary, VIScene — need Go-side tracking)
+//   4. Math library functions (powf — faster to intercept than emulate)
+//
+// Everything else runs as native MIPS code in the interpreter.
 
-// nativeSubParsers lists PS2 parser functions that should execute natively
-// (not be auto-stubbed). These are ESF child parsers that call ReadBegin/
-// ReadEnd and Read* to parse sub-objects. Adding a function here lets
-// the MIPS interpreter execute it fully, capturing all its reads.
-var nativeSubParsers = []uint32{
-	// CSprite sub-parsers that should execute natively.
-	// Critical: sub-parsers that call ReadBegin/ReadEnd MUST run natively
-	// so the tree stream stays in sync. A stubbed sub-parser that skips
-	// ReadEnd leaves the tree stream pointing at the wrong node.
-
-	// Simple data readers (count + fields)
-	0x00437B80, // ParseCSpritePlayList
-	0x00437E30, // ParseCSpriteNodeIDList
-	0x00437F18, // ParseCSpriteASlotList
-	0x00437FF8, // ParseCSpriteTSlotList
-	0x00438100, // ParseCSpriteContSound
-	0x00437A78, // ParseCSpriteSkinList
-	0x00436248, // ParseHSpriteTriggers
-	0x004372D8, // ParseRefMap
-
-	// ParseMaterialPal and its sub-parsers are NOT whitelisted because they
-	// need VIRaster (GPU) functions to create surfaces/materials. Instead,
-	// ParseMaterialPal is handled by a special stub that reads past its
-	// ReadBegin/ReadEnd pair to keep the tree stream in sync.
-}
-
-// Known Read* function addresses (from SUPPORT symbol map)
+// Known Read* function addresses (from SUPPORT symbol map).
+// These MUST be intercepted — they read from the ESF data stream.
 var readFuncs = map[uint32]string{
 	0x003EB0A8: "ReadBegin",
 	0x003EB0C8: "ReadBegin2",
 	0x003EB3C8: "ReadEnd",
 	0x003EA350: "ObjectVersion",
+	0x003EA330: "NumSubObjects",
+	0x003EA390: "ObjectSize",
 	0x003EB6E8: "Read_Ri",
 	0x003EB780: "Read_RUi",
 	0x003EB948: "Read_Rf",
@@ -49,13 +36,132 @@ var readFuncs = map[uint32]string{
 	0x003EBA78: "Read_PUci",
 }
 
-// Well-known math functions to intercept
-var mathFuncs = map[uint32]string{
-	// powf is critical for packing scale computation
+// hardwareStubs lists functions that touch PS2 hardware and cannot execute
+// natively. These return fake success values or heap-allocated pointers.
+// Format: address → return behavior.
+var hardwareStubs = map[uint32]stubAction{
+	// VISurface::Init — runs natively but SetDMAHeaders touches GS.
+	// VIScene — pools initialized manually via RunCall. These stubs provide
+	// valid return values for sprite/animation/refmap management.
+	0x00463698: {ret: retZero},    // CreateSprite
+	0x004638D8: {ret: retHeap512}, // Sprite
+	0x00463B90: {ret: retZero},    // CreateAnimation
+	0x00463C00: {ret: retHeap512}, // Animation
+	0x00463CE8: {ret: retZero},    // CreateRefMap
+	0x00463D78: {ret: retHeap256}, // RefMap
+	0x00463C18: {ret: retZero},    // ShareAnimation
+	0x00463D90: {ret: retZero},    // ShareRefMap
+	0x00446820: {ret: retZero},    // AddPlay
+	0x00446568: {ret: retZero},    // AttachSkin
+	0x004465C0: {ret: retZero},    // Attach
+
+	// VICSprite post-parse initialization — no ESF reads, operate on sprite struct
+	0x004251C0: {ret: retZero},    // SetDefaultEntries
+	0x00425688: {ret: retZero},    // InitTextSlots
+	0x004259F8: {ret: retZero},    // SetAnimPriorities
+	0x00425BE0: {ret: retZero},    // SetAnimSoundChannels
+	0x00425710: {ret: retZero},    // Share (VICSprite)
+	0x00425048: {ret: retZero},    // SetDefaults
+
+	// VISoundDevice — audio hardware stubs
+	0x0049AD30: {ret: retZero},    // CreateSound
+	0x0049AE30: {ret: retHeap256}, // Sound (get pointer)
+	0x0049AE80: {ret: retZero},    // ReleaseSound
+	0x0049D950: {ret: retHeap256}, // AsWave (get wave object)
+	0x0049D980: {ret: retHeap256}, // AsXm (get XM object)
+	0x0049D6D0: {ret: retZero},    // VIXm::Create
+	0x0049D470: {ret: retZero},    // VIWave::SetSampleRate
+	0x0049D2F8: {ret: retZero},    // VIWave::Create
+	0x0049D3D8: {ret: retZero},    // VIWave::Format
+	0x0049D3F8: {ret: retZero},    // VIWave::LockBuffer
+	0x0049D418: {ret: retZero},    // VIWave::UnlockBuffer
+	0x0043E190: {ret: retZero},    // AdpcmToPcm (audio decode)
+	// 0x00446820 AddPlay — already listed above
+
+	0x0040E498: {ret: retZero}, // VISurface::SetDMAHeaders (GS DMA transfer setup)
+	// VIRaster Share functions — reference counting on pool entries that may not exist
+	0x00404388: {ret: retZero}, // ShareMaterialPal
+	0x004032B8: {ret: retZero}, // SharePrimBuffer
+	0x00489568: {ret: retZero}, // ShareCollBuffer
+
+	// DestroyPool — VIPool variants that can infinite-loop during Allocate realloc.
+	// Only stub the VIRaster pool DestroyPools. Other DestroyPools (VIMap, VIScene)
+	// run natively.
+	// DestroyPool — all VIPool variants. These iterate pool entries and can
+	// infinite-loop during Allocate realloc when the entry linked list has
+	// a self-referencing node. Safe to stub since we use a bump allocator.
+	// VIRaster pools:
+	0x004097C8: {ret: retZero}, // DestroyPool<VIPool<Surface*>>
+	0x00409428: {ret: retZero}, // DestroyPool<VIPool<PrimBuffer*>>
+	0x00409B18: {ret: retZero}, // DestroyPool<VIPool<MaterialPal*>>
+	0x00409C88: {ret: retZero}, // DestroyPool<VIPool<RasterMaterialLRU>>
+	0x00409DF8: {ret: retZero}, // DestroyPool<VIPool<RFont*>>
+	0x00409658: {ret: retZero}, // DestroyPool<VIPool<ColorBuffer*>>
+	// VIScene pools:
+	0x0046D2C8: {ret: retZero}, // DestroyPool<VIPool<Sprite*>>
+	0x0046D438: {ret: retZero}, // DestroyPool<VIPool<HSpriteAnim*>>
+	0x0046D5A8: {ret: retZero}, // DestroyPool<VIPool<RefMap*>>
+	0x0046D718: {ret: retZero}, // DestroyPool<VIPool<StaticLighting*>>
+	// VICollide pools:
+	0x0048DEB8: {ret: retZero}, // DestroyPool<VIPool<CollBuffer*>>
+	// VIHSprite pools:
+	0x00427278: {ret: retZero}, // DestroyPool<VIPool<HSpriteAttachment>>
+	0x004276A8: {ret: retZero}, // DestroyPool<VIPool<HSpritePlay>>
+	0x00427B28: {ret: retZero}, // DestroyPool<VIPool<HSpritePlayNode>>
+	// VIVector/VIArray/VIMap DestroyPools:
+	0x00426960: {ret: retZero}, // DestroyPool<VIVector<HSpriteNode>>
+	0x00426D80: {ret: retZero}, // DestroyPool<VIVector<Matrix44>>
+	0x00427018: {ret: retZero}, // DestroyPool<VIArray<HSpriteTrigger>>
+	0x0040A790: {ret: retZero}, // DestroyPool<VIArray<int>>
+	0x003E45D0: {ret: retZero}, // DestroyPool<VIMap<DictEntry>>
+	0x00415F20: {ret: retZero}, // DestroyPool<VIMap<int,int>>
+	0x004604C0: {ret: retZero}, // DestroyPool<VIArray<RadialFloraInst>>
+	0x0043ED68: {ret: retZero}, // DestroyPool<VIArray<ResourceElem>>
+	0x00459300: {ret: retZero}, // DestroyPool<VIPool<ParticleDefinition*>>
+	0x0045B1E8: {ret: retZero}, // DestroyPool<VIPool<ParticleMotif*>>
+	0x0046D8B8: {ret: retZero}, // DestroyPool<VIVector<SceneDisplayElem>>
+	0x004704F0: {ret: retZero}, // DestroyPool<VIVector<int>>
+	0x0047CC48: {ret: retZero}, // DestroyPool<VIPool<SpellEffect*>>
+	// VISurface::Init — stub. CalcSurfaceOffsets uses a jump table for bitdepth
+	// that requires valid data section access. Lock/Unlock/Convert also stubbed.
+	0x0040DF10: {ret: retZero}, // VISurface::Init
+	0x0040E030: {ret: retZero}, // LockMipLevel
+	0x0040E090: {ret: retZero}, // UnlockMipLevel
+	0x0040DFF4: {ret: retZero}, // LockPalette
+	0x0040E158: {ret: retZero}, // UnlockPalette
+	// Convert functions write to pixel buffer — no-op since Lock returns null
+	0x0043DA90: {ret: retZero}, // Convert32
+	0x0043DDA8: {ret: retZero}, // Convert16
+	0x0043DF28: {ret: retZero}, // Convert8
+	0x0043DFF8: {ret: retZero}, // Convert4
+	0x0043DC08: {ret: retZero}, // Convert24
+
+	// VIRasterTess — PS2 VU1 tessellation engine.
+	0x004149D8: {ret: retZero}, // VIRasterTess::Init
+
+	// GS register / DMA functions
+	0x003FF1C0: {ret: retZero}, // InitGSRegisters
+	0x003FF050: {ret: retZero}, // InitDMADoubleBuffer
+	0x003FEEF8: {ret: retZero}, // UploadRasterMicro (VU1 microcode)
+	0x003FEE48: {ret: retZero}, // sceGsSyncV
+	0x003FEE60: {ret: retZero}, // sceGsSwapDBuffDc
+}
+
+type retType int
+
+const (
+	retZero    retType = iota // return 0 (success)
+	retIndex                  // return incrementing index via FakeRaster/FakeScene
+	retHeap256                // return heapAlloc(256) pointer
+	retHeap512                // return heapAlloc(512) pointer
+)
+
+type stubAction struct {
+	ret retType
 }
 
 // handleJAL intercepts JAL calls. Returns true if the call was handled
-// (caller should skip to return address), false to execute normally.
+// (caller should skip to return address), false to execute natively.
 func (m *Interp) handleJAL(target uint32) bool {
 	// Call trace (PCSX2 DebugInterface style)
 	if m.callTraceEnabled {
@@ -68,58 +174,54 @@ func (m *Interp) handleJAL(target uint32) bool {
 		})
 	}
 
-	// Runtime object functions (VIDictionary, VIScene, VIRaster)
+	// 1. Runtime object functions (VIDictionary, VIScene — need Go-side tracking)
 	if m.handleRuntime(target) {
 		return true
 	}
 
+	// 2a. CLIENT stream reads — route through PacketStream
+	if m.packetStream != nil {
+		if m.handleClientRead(target, m.packetStream) {
+			return true
+		}
+	}
+
+	// 2b. ESF Read* functions — route through our Go ESF stream
 	if name, ok := readFuncs[target]; ok {
 		m.handleRead(name)
 		m.Intercepted++
 		return true
 	}
 
-	// powf interception — PS2 uses this for packing scale
-	// powf is called via jalr, not jal, but also check here
-	// Symbol: powf at various addresses
-
-	// powf — critical for packing scale: pow(2.0, exponent)
-	if target == 0x00127328 {
-		base := m.fregs[12] // $f12 = first float arg
-		exp := m.fregs[13]  // $f13 = second float arg (from $f14 on PS2, but decompiler maps to 13)
-		result := float32(math.Pow(float64(base), float64(exp)))
-		m.fregs[0] = result // $f0 = return value
-		m.Intercepted++
-		return true
-	}
-
-	// ParseMaterialPal — skip by calling ReadBegin + ReadEnd to advance
-	// the tree stream past the MaterialPalette child. Can't run natively
-	// because it needs VIRaster to create surfaces/materials.
-	if target == 0x00435240 {
-		if m.Reader != nil {
-			m.Reader.ReadBegin() // opens 0x1110 MaterialPalette
-			m.Reader.ReadEnd()   // closes it without reading contents
+	// 3. Memory allocation — route through our heap allocator
+	if target == 0x004C4638 || target == 0x004C47D8 { // __builtin_new / __builtin_vec_new
+		size := uint32(m.rReg(4)) // $a0 = size
+		if size == 0 {
+			size = 16
 		}
-		m.wReg32(2, 0) // return 0 (success)
+		ptr := m.heapAlloc(size)
+		m.wReg32(2, int64(ptr))
+		m.Intercepted++
+		return true
+	}
+	if target == 0x004C45C0 || target == 0x004C4760 { // __builtin_delete / __builtin_vec_delete
+		m.wReg32(2, 0)
 		m.Intercepted++
 		return true
 	}
 
-	// Skip-stubs: sub-parsers that call ReadBegin internally.
-	// When stubbed, they must still call ReadBegin + ReadEnd to keep
-	// the tree stream's child index in sync.
+	// 4. Skip-stubs: subsystems with deep VIRaster/VIScene dependencies.
 	for _, skipAddr := range []uint32{
-		0x00435240, // ParseMaterialPal
-		0x0043A790, // ParseSoundArray
-		0x004379D8, // ParseCSpriteSpriteArray
-		0x004364C0, // ParseHSpriteAnimArray
-		0x00435FA0, // ParseHSpriteHierarchy
+		0x00435240, // ParseMaterialPal — VIRaster material/surface chain
+		0x00434D08, // ParseSurfaceArray — VIRaster Surface creation
+		0x00435F00, // ParseHSpriteSpriteArray — needs full VIScene sprite management
+		0x004379D8, // ParseCSpriteSpriteArray — same
+		// ParseSoundArray runs natively — captures audio resource references
 	} {
 		if target == skipAddr {
 			if m.Reader != nil {
-				m.Reader.ReadBegin() // open the child
-				m.Reader.ReadEnd()   // close it (skip contents)
+				m.Reader.ReadBegin()
+				m.Reader.ReadEnd()
 			}
 			m.wReg32(2, 0)
 			m.Intercepted++
@@ -127,145 +229,34 @@ func (m *Interp) handleJAL(target uint32) bool {
 		}
 	}
 
-	// VIScene runtime object creation — return fake pointers.
-	// These are called by whitelisted sub-parsers (ParseRefMap, etc.)
-	// and need non-null pointers for Init/Insert to write to.
-	if target == 0x00463CE8 { // CreateRefMap
-		m.wReg32(2, 0) // return index 0
-		m.Intercepted++
-		return true
-	}
-	if target == 0x00463D78 { // RefMap — return fake pointer
-		m.wReg32(2, int64(0x01F50000))
+	// 5. powf — math library, faster to intercept
+	if target == 0x00127328 {
+		base := m.fregs[12]
+		exp := m.fregs[13]
+		result := float32(math.Pow(float64(base), float64(exp)))
+		m.fregs[0] = result
 		m.Intercepted++
 		return true
 	}
 
-	// VIScene::Animation — MUST return fake pointer (auto-stub can't detect
-	// the daddu $s4,$v0,$zero past a beq branch in the delay slot chain)
-	if target == 0x00463C00 {
-		m.wReg32(2, int64(0x01F70000))
-		m.Intercepted++
-		return true
-	}
-
-	// VIRaster::CreatePrimBuffer — return a valid fake index (0, success)
-	if target == 0x00403220 {
-		m.wReg32(2, 0) // return index 0
-		m.Intercepted++
-		return true
-	}
-	// VIRaster::PrimBuffer — return a fake PrimBuffer pointer (non-null)
-	// The parser stores this in $s1 and uses it as base for Init/Lock/SetPacking/Vertex calls.
-	if target == 0x004032A0 {
-		m.wReg32(2, int64(0x01F80000)) // fake PrimBuffer at 0x01F80000
-		m.Intercepted++
-		return true
-	}
-
-	// VIDictionary::Find — return 0 (found) and write a plausible resource type.
-	// PS2 parsers call: Find(dict, dictID, &resourceType, &index)
-	// After Find, they check if the resource type matches the expected value.
-	// $a2 = &resourceType (output), $a3 = &index (output).
-	// We write type from the next instruction's comparison constant (9=CSprite,
-	// 11=PrimBuffer, etc.) — but since we can't peek ahead, we write 0 which
-	// works when dictID is 0 (parser skips Find entirely for dictID==0).
-	// For non-zero dictIDs, the parser uses the Find result to decide whether
-	// to create a new object or reuse an existing one.
-	if target == 0x003E4318 {
-		// VIDictionary::Find — always return 1 (not found).
-		// During parsing, objects are being created for the first time.
-		// The "not found" path leads to object creation which is what we want.
-		//
-		// After Find returns non-zero, parsers check the resource type:
-		//   li $v0, N; if (type != N) → error
-		// We write the expected type N to the output pointer.
-		// Peek at return+8 (past the beq check delay slot) for "li $v0, N":
-		a2 := uint32(m.rReg(6)) // &resourceType output
-		ra := uint32(m.rReg(31))
-		if a2 != 0 && ra > 0 && ra+8 < uint32(len(m.code)) {
-			// The pattern after Find is:
-			//   beq/bnez $v0 → branch (delay: lw $v1, ...)
-			//   li $v0, N    ← the expected type
-			liInsn := m.load32(ra + 4) // instruction after delay slot
-			liOp := (liInsn >> 26) & 0x3F
-			liRt := (liInsn >> 16) & 0x1F
-			liImm := liInsn & 0xFFFF
-			if liOp == 9 && liRt == 2 { // ADDIU $v0, $zero, N (li $v0, N)
-				m.store16(a2, uint16(liImm)) // write expected type
-			} else if liOp == 8 && liRt == 2 { // ADDI variant
-				m.store16(a2, uint16(liImm))
-			}
+	// 4. Hardware stubs — functions that touch PS2 GPU/GS
+	if stub, ok := hardwareStubs[target]; ok {
+		switch stub.ret {
+		case retZero:
+			m.wReg32(2, 0)
+		case retIndex:
+			m.wReg32(2, 0) // index 0, caller uses it to fetch pointer
+		case retHeap256:
+			m.wReg32(2, int64(m.heapAlloc(256)))
+		case retHeap512:
+			m.wReg32(2, int64(m.heapAlloc(512)))
 		}
-		m.wReg32(2, 1) // return 1 = not found
 		m.Intercepted++
 		return true
 	}
 
-	// Whitelist: sub-parsers that should execute natively (NOT be stubbed).
-	// These are ESF child parsers called by tree-navigating parsers like
-	// ParseCSpriteObj. They call ReadBegin/ReadEnd and Read* functions
-	// which are routed through our ESFTreeStream.
-	for _, addr := range nativeSubParsers {
-		if target == addr {
-			return false // execute natively, don't stub
-		}
-	}
-
-	// Auto-stub: ANY function in known code ranges.
-	// Smart return: peek at the instruction after the return (the caller's
-	// check) to decide what to return. Common patterns:
-	//   bltz $v0 → caller checks $v0 < 0 for error → return 0 (success)
-	//   beq $v0, $zero → caller checks $v0 == NULL → return fake pointer
-	// Default: return 0 (success for most functions).
-	//
-	// For functions that return pointers used as base addresses (PrimBuffer,
-	// Animation, etc.), specific intercepts above return fake pointers.
-	// Everything else gets 0 which passes bltz/error checks.
-	if (target >= 0x003E3D00 && target < 0x00559F14) ||
-		(target >= 0x00100000 && target < 0x00170000) ||
-		(target >= 0x00CC7DA8 && target < 0x00D546A4) {
-		// Check if the caller's next instruction after return treats $v0 as a pointer.
-		// If the return address loads from $v0 (lw $rX, offset($v0)), we need non-null.
-		// Check the first 4 instructions after return to detect pointer usage.
-		// PCSX2 doesn't need this — it executes everything natively. We need it
-		// because stubbed functions must return plausible values.
-		ra := uint32(m.rReg(31))
-		if ra > 0 && ra+16 < uint32(len(m.code)) {
-			for scan := uint32(0); scan < 16; scan += 4 {
-				insn := m.load32(ra + scan)
-				op := (insn >> 26) & 0x3F
-				rs := (insn >> 21) & 0x1F
-				funct := insn & 0x3F
-
-				// lw/sw with $v0 as base → direct pointer dereference
-				if (op == 35 || op == 43) && rs == 2 {
-					m.wReg32(2, int64(0x01F60000))
-					m.Intercepted++
-					return true
-				}
-				// daddu/addu $rX, $v0, $zero → saving pointer to register
-				if op == 0 && (funct == 45 || funct == 33) {
-					srcRs := (insn >> 21) & 0x1F
-					srcRt := (insn >> 16) & 0x1F
-					if (srcRs == 2 && srcRt == 0) || (srcRs == 0 && srcRt == 2) {
-						m.wReg32(2, int64(0x01F60000))
-						m.Intercepted++
-						return true
-					}
-				}
-				// Stop scanning at unconditional jumps (but continue past conditional branches
-				// since the pointer save might be in a delay slot)
-				if op == 2 || op == 3 { // J, JAL only
-					break
-				}
-			}
-		}
-		m.wReg32(2, 0) // default: return 0 (success)
-		m.Intercepted++
-		return true
-	}
-
+	// 5. DEFAULT: execute natively. The EE dump has all SUPPORT code.
+	// No auto-stub — let the interpreter run the actual PS2 instructions.
 	return false
 }
 
@@ -315,6 +306,12 @@ func (m *Interp) handleRead(name string) {
 
 	case "ObjectVersion":
 		m.wReg32(2, int64(r.ObjectVersion()))
+
+	case "NumSubObjects":
+		m.wReg32(2, int64(r.NumSubObjects()))
+
+	case "ObjectSize":
+		m.wReg32(2, int64(r.ObjectSize()))
 
 	case "Read_Ri":
 		a1 := uint32(m.rReg(5))
@@ -373,7 +370,6 @@ func (m *Interp) handleRead(name string) {
 		m.wReg32(2, 0)
 
 	case "Read_PUci":
-		// Bulk read: $a1=dest, $a2=count
 		a1 := uint32(m.rReg(5))
 		count := int(m.rReg(6) & 0xFFFFFFFF)
 		data := r.ReadBytes(count)
@@ -389,13 +385,9 @@ func (m *Interp) handleRead(name string) {
 
 // zeroFakePointers zeros memory at all fake pointer addresses so that
 // reads from fake objects return 0 instead of stale EE dump data.
-// Critical: the EE dump may have non-zero data at these addresses from
-// the game's runtime state, causing incorrect branch decisions.
-// ZeroFakePointersExported is the exported version of zeroFakePointers.
 func ZeroFakePointersExported(interp *Interp) { zeroFakePointers(interp) }
 
 func zeroFakePointers(interp *Interp) {
-	// Each fake pointer region: 256 bytes should cover any struct fields
 	for _, base := range []uint32{0x01F40000, 0x01F50000, 0x01F60000, 0x01F70000,
 		0x01F80000, 0x01F90000, 0x01FA0000, 0x01FB0000, 0x01FC0000, 0x01FD0000} {
 		for i := uint32(0); i < 256; i++ {
@@ -404,45 +396,80 @@ func zeroFakePointers(interp *Interp) {
 	}
 }
 
-// RunParserV0 runs a v0 sub-parser (ParsePrimBufferObjV0, etc.) on object data.
-// The stream is pre-positioned past the 8-byte ESF header, and ReadBegin state
-// is pre-populated, matching how the parent parser calls the v0 function.
+// setupVIESFParse initializes the VIESFParse context with manually
+// initialized pools. Uses RunCall for pool Init only (no default
+// resource creation that would pollute the dictionary).
+// The RunCall stack issue is mitigated by clearing the main stack
+// region after all RunCalls complete.
+func setupVIESFParse(interp *Interp) uint32 {
+	zeroFakePointers(interp)
+	thisAddr := uint32(0x01FE0000)
+	for i := uint32(0); i < 512; i++ {
+		interp.Store8At(thisAddr+i, 0)
+	}
+
+	// Allocate runtime objects
+	raster := interp.heapAlloc(0x5000)
+	collide := interp.heapAlloc(4096)
+	scene := interp.heapAlloc(0x5000)
+	dict := interp.heapAlloc(4096)
+
+	// Initialize VIRaster pools manually (matching VIPool::Clear)
+	if raster != 0 {
+		interp.store32(raster+0x3C, 1) // initialized flag
+		for _, off := range []uint32{0x4B78, 0x4B9C, 0x4BB4, 0x4BE4, 0x4BFC, 0x4C34} {
+			interp.store32(raster+off+0x0C, 0xFFFFFFFF) // freeHead = -1
+			interp.store32(raster+off+0x14, 0xFFFFFFFF) // usedTail = -1
+		}
+		for off := uint32(0x45A0); off <= 0x45BC; off += 4 {
+			interp.store32(raster+off, 0xFFFFFFFF)
+		}
+	}
+
+	// Initialize VIScene pools via RunCall (just pool Init, no default resources)
+	if scene != 0 {
+		interp.store32(scene+0x4B9C, raster)
+		interp.store32(scene+0x4BA4, dict)
+		interp.store32(scene+0x4BA8, collide)
+		interp.RunCall(0x0046DE30, scene+0x3E4, 0) // VIPool<Sprite*>::Init
+		interp.RunCall(0x0046E098, scene+0x3FC, 0) // VIPool<HSpriteAnim*>::Init
+		interp.RunCall(0x0046E300, scene+0x414, 0) // VIPool<RefMap*>::Init
+		interp.RunCall(0x0046DBC8, scene+0x03CC)   // VIList<Actor>::Init
+		interp.RunCall(0x0046DBF0, scene+0x03D8)   // VIList<SceneOccup>::Init
+	}
+
+	// Clear the main stack region to prevent RunCall stale data
+	// from interfering with the main Run's stack frames
+	for addr := uint32(0x01FEF000); addr < 0x01FF0000; addr += 4 {
+		interp.store32(addr, 0)
+	}
+
+	// Store pointers in VIESFParse context
+	interp.Store32At(thisAddr+0x0C, raster)
+	interp.Store32At(thisAddr+0x14, collide)
+	interp.Store32At(thisAddr+0x18, scene)
+	interp.Store32At(thisAddr+0x20, dict)
+	interp.Store32At(thisAddr+0x24, 0x01FD0000) // VIObjFile*
+
+	return thisAddr
+}
+
+// RunParserV0 runs a v0 sub-parser on object data.
 func RunParserV0(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
 	interp := New(eeDump)
 	esf := NewESFStream(objData)
 	esf.ReadBegin()
-	zeroFakePointers(interp)
-	thisAddr := uint32(0x01FE0000)
-	for i := uint32(0); i < 512; i++ {
-		interp.Store8At(thisAddr+i, 0)
-	}
-	interp.Store32At(thisAddr+0x0C, 0x01FB0000)
-	interp.Store32At(thisAddr+0x18, 0x01FA0000)
-	interp.Store32At(thisAddr+0x20, 0x01F90000)
-	interp.Store32At(thisAddr+0x24, 0x01FD0000)
-
-	interp.Reader = esf // set Reader for handleRead routing
-	result := interp.Run(parserAddr, nil, thisAddr) // nil ESF, Reader already set
+	thisAddr := setupVIESFParse(interp)
+	interp.Reader = esf
+	result := interp.Run(parserAddr, nil, thisAddr)
 	return result, esf.Reads
 }
 
 // RunParser sets up a VIESFParse context and runs a parser function.
-// Returns the read trace from the ESF stream.
 func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
 	interp := New(eeDump)
 	esf := NewESFStream(objData)
-	zeroFakePointers(interp)
-	thisAddr := uint32(0x01FE0000)
-	for i := uint32(0); i < 512; i++ {
-		interp.Store8At(thisAddr+i, 0)
-	}
-	// Note: thisAddr+0x04 is a callback pointer, NOT VIScene. Must be NULL
-	// to skip the jalr dispatch in BeginMaterial/EndMaterial material change callbacks.
-	interp.Store32At(thisAddr+0x0C, 0x01FB0000) // VIRaster* (non-null — CreatePrimBuffer needs this)
-	interp.Store32At(thisAddr+0x18, 0x01FA0000) // VIParticleSystem* (non-null stub)
-	interp.Store32At(thisAddr+0x20, 0x01F90000) // VIDictionary* (non-null stub)
-	interp.Store32At(thisAddr+0x24, 0x01FD0000) // VIObjFile* (non-null, Read* intercepted)
-
+	thisAddr := setupVIESFParse(interp)
 	result := interp.Run(parserAddr, esf, thisAddr)
 	return result, esf.Reads
 }
