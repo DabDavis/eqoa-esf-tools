@@ -53,7 +53,9 @@ func (s *ESFTreeStream) ReadBegin() (typ uint16, ver uint16, size uint32) {
 		typ = s.current.Type
 		ver = uint16(s.current.Version)
 		size = uint32(s.current.Size)
-		s.pos = int(s.current.Offset) + 8 // skip type(2)+ver(2)+size(4)
+		// Go ObjInfo.Offset already points past the 12-byte header
+		// (type(2)+ver(2)+size(4)+numSubObjects(4)), so no skip needed.
+		s.pos = int(s.current.Offset)
 		s.Reads = append(s.Reads, ReadEntry{
 			Type:  "ReadBegin",
 			Pos:   int(s.current.Offset),
@@ -87,7 +89,7 @@ func (s *ESFTreeStream) ReadBegin() (typ uint16, ver uint16, size uint32) {
 	// Push current state, descend into child
 	s.stack = append(s.stack, treeFrame{node: s.current, pos: s.pos})
 	s.current = child
-	s.pos = int(child.Offset) + 8 // past header
+	s.pos = int(child.Offset) // Go ObjInfo.Offset is already past the header
 
 	typ = child.Type
 	ver = uint16(child.Version)

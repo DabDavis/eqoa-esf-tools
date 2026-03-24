@@ -62,6 +62,14 @@ func (m *Interp) handleJAL(target uint32) bool {
 		return true
 	}
 
+	// VIScene::Animation — MUST return fake pointer (auto-stub can't detect
+	// the daddu $s4,$v0,$zero past a beq branch in the delay slot chain)
+	if target == 0x00463C00 {
+		m.wReg32(2, int64(0x01F70000))
+		m.Intercepted++
+		return true
+	}
+
 	// VIRaster::CreatePrimBuffer — return a valid fake index (0, success)
 	if target == 0x00403220 {
 		m.wReg32(2, 0) // return index 0
@@ -120,16 +128,38 @@ func (m *Interp) handleJAL(target uint32) bool {
 		(target >= 0x00CC7DA8 && target < 0x00D546A4) {
 		// Check if the caller's next instruction after return treats $v0 as a pointer.
 		// If the return address loads from $v0 (lw $rX, offset($v0)), we need non-null.
+		// Check the first 4 instructions after return to detect pointer usage.
+		// PCSX2 doesn't need this — it executes everything natively. We need it
+		// because stubbed functions must return plausible values.
 		ra := uint32(m.rReg(31))
-		if ra > 0 && ra < uint32(len(m.code))-4 {
-			nextInsn := m.load32(ra)
-			nextOp := (nextInsn >> 26) & 0x3F
-			nextRs := (nextInsn >> 21) & 0x1F
-			// If next instruction is lw/sw with $v0 as base register → pointer needed
-			if (nextOp == 35 || nextOp == 43) && nextRs == 2 { // LW/SW with rs=$v0
-				m.wReg32(2, int64(0x01F60000)) // fake pointer
-				m.Intercepted++
-				return true
+		if ra > 0 && ra+16 < uint32(len(m.code)) {
+			for scan := uint32(0); scan < 16; scan += 4 {
+				insn := m.load32(ra + scan)
+				op := (insn >> 26) & 0x3F
+				rs := (insn >> 21) & 0x1F
+				funct := insn & 0x3F
+
+				// lw/sw with $v0 as base → direct pointer dereference
+				if (op == 35 || op == 43) && rs == 2 {
+					m.wReg32(2, int64(0x01F60000))
+					m.Intercepted++
+					return true
+				}
+				// daddu/addu $rX, $v0, $zero → saving pointer to register
+				if op == 0 && (funct == 45 || funct == 33) {
+					srcRs := (insn >> 21) & 0x1F
+					srcRt := (insn >> 16) & 0x1F
+					if (srcRs == 2 && srcRt == 0) || (srcRs == 0 && srcRt == 2) {
+						m.wReg32(2, int64(0x01F60000))
+						m.Intercepted++
+						return true
+					}
+				}
+				// Stop scanning at unconditional jumps (but continue past conditional branches
+				// since the pointer save might be in a delay slot)
+				if op == 2 || op == 3 { // J, JAL only
+					break
+				}
 			}
 		}
 		m.wReg32(2, 0) // default: return 0 (success)
