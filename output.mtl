@@ -1,0 +1,2450 @@
+newmtl material0-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=9
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output0-0.png
+
+newmtl material1-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output1-0.png
+
+newmtl material2-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output2-0.png
+
+newmtl material3-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output3-0.png
+
+newmtl material4-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output4-0.png
+
+newmtl material5-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output5-0.png
+
+newmtl material6-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output6-0.png
+
+newmtl material7-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output7-0-alpha.png
+map_Kd output_tex/output7-0.png
+
+newmtl material8-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output8-0.png
+
+newmtl material9-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output9-0.png
+
+newmtl material10-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.300000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output10-0.png
+
+newmtl material11-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output11-0.png
+
+newmtl material12-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=-0.009000,0.000000 uvt=[4.000000 0.000000 0.000000 -0.000000 16.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.250000 0.062500 1 output_tex/output12-0.png
+
+newmtl material13-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,-0.100000 uvt=[25.000000 0.000000 0.000000 -0.000000 25.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.040000 0.040000 1 output_tex/output13-0.png
+
+newmtl material14-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=9
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output14-0.png
+
+newmtl material15-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=9
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output15-0.png
+
+newmtl material16-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=-0.009000,0.000000 uvt=[4.000000 0.000000 0.000000 -0.000000 16.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.250000 0.062500 1 output_tex/output16-0.png
+
+newmtl material17-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,-0.100000 uvt=[25.000000 0.000000 0.000000 -0.000000 25.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.040000 0.040000 1 output_tex/output17-0.png
+
+newmtl material18-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=9
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output18-0.png
+
+newmtl material19-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output19-0.png
+
+newmtl material20-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output20-0.png
+
+newmtl material21-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output21-0.png
+
+newmtl material22-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output22-0.png
+
+newmtl material23-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output23-0.png
+
+newmtl material24-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output24-0.png
+
+newmtl material25-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output25-0.png
+
+newmtl material26-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output26-0.png
+
+newmtl material27-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output27-0.png
+
+newmtl material28-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output28-0.png
+
+newmtl material29-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output29-0.png
+
+newmtl material30-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output30-0.png
+
+newmtl material31-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output31-0.png
+
+newmtl material32-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output32-0.png
+
+newmtl material33-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output33-0.png
+
+newmtl material34-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output34-0.png
+
+newmtl material35-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output35-0.png
+
+newmtl material36-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output36-0.png
+
+newmtl material37-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output37-0.png
+
+newmtl material38-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output38-0-alpha.png
+map_Kd output_tex/output38-0.png
+
+newmtl material39-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output39-0.png
+
+newmtl material40-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output40-0.png
+
+newmtl material41-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output41-0-alpha.png
+map_Kd output_tex/output41-0.png
+
+newmtl material42-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output42-0.png
+
+newmtl material43-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output43-0.png
+
+newmtl material44-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output44-0.png
+
+newmtl material45-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output45-0.png
+
+newmtl material46-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output46-0.png
+
+newmtl material47-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[10.000000 0.000000 0.000000 -0.000000 10.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.100000 0.100000 1 output_tex/output47-0.png
+
+newmtl material48-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output48-0.png
+
+newmtl material49-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output49-0.png
+
+newmtl material50-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output50-0.png
+
+newmtl material51-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output51-0.png
+
+newmtl material52-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output52-0.png
+
+newmtl material53-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output53-0.png
+
+newmtl material54-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output54-0.png
+
+newmtl material55-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output55-0.png
+
+newmtl material56-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output56-0.png
+
+newmtl material57-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output57-0.png
+
+newmtl material58-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output58-0.png
+
+newmtl material59-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output59-0.png
+
+newmtl material60-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output60-0.png
+
+newmtl material61-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output61-0.png
+
+newmtl material62-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 0.000000 1.000000 0.000000 0.000000 0.000000 1.000000]
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+
+newmtl material63-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output63-0.png
+
+newmtl material64-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output64-0.png
+
+newmtl material65-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output65-0.png
+
+newmtl material66-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output66-0.png
+
+newmtl material67-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output67-0.png
+
+newmtl material68-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output68-0.png
+
+newmtl material69-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output69-0.png
+
+newmtl material70-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output70-0.png
+
+newmtl material71-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output71-0.png
+
+newmtl material72-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output72-0.png
+
+newmtl material73-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output73-0.png
+
+newmtl material74-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output74-0.png
+
+newmtl material75-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output75-0.png
+
+newmtl material76-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output76-0.png
+
+newmtl material77-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output77-0.png
+
+newmtl material78-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output78-0.png
+
+newmtl material79-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output79-0.png
+
+newmtl material80-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output80-0.png
+
+newmtl material81-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output81-0.png
+
+newmtl material82-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output82-0-alpha.png
+map_Kd output_tex/output82-0.png
+
+newmtl material83-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output83-0.png
+
+newmtl material84-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output84-0.png
+
+newmtl material85-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output85-0.png
+
+newmtl material86-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output86-0.png
+
+newmtl material87-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output87-0.png
+
+newmtl material88-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output88-0.png
+
+newmtl material89-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output89-0.png
+
+newmtl material90-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output90-0.png
+
+newmtl material91-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output91-0.png
+
+newmtl material92-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output92-0.png
+
+newmtl material93-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output93-0.png
+
+newmtl material94-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output94-0.png
+
+newmtl material95-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output95-0.png
+
+newmtl material96-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output96-0.png
+
+newmtl material97-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output97-0.png
+
+newmtl material98-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output98-0.png
+
+newmtl material99-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output99-0.png
+
+newmtl material100-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output100-0.png
+
+newmtl material101-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output101-0.png
+
+newmtl material102-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output102-0.png
+
+newmtl material103-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output103-0.png
+
+newmtl material104-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output104-0.png
+
+newmtl material105-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output105-0.png
+
+newmtl material106-0
+# blendmode=0 wrapmode=3 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output106-0.png
+
+newmtl material107-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output107-0.png
+
+newmtl material108-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output108-0.png
+
+newmtl material109-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output109-0.png
+
+newmtl material110-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output110-0.png
+
+newmtl material111-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output111-0.png
+
+newmtl material112-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output112-0.png
+
+newmtl material113-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output113-0.png
+
+newmtl material114-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output114-0.png
+
+newmtl material115-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output115-0-alpha.png
+map_Kd output_tex/output115-0.png
+
+newmtl material116-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output116-0.png
+
+newmtl material117-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output117-0.png
+
+newmtl material118-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output118-0.png
+
+newmtl material119-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output119-0.png
+
+newmtl material120-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output120-0.png
+
+newmtl material121-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output121-0.png
+
+newmtl material122-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output122-0.png
+
+newmtl material123-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output123-0.png
+
+newmtl material124-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output124-0.png
+
+newmtl material125-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output125-0.png
+
+newmtl material126-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output126-0.png
+
+newmtl material127-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output127-0-alpha.png
+map_Kd output_tex/output127-0.png
+
+newmtl material128-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output128-0.png
+
+newmtl material129-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output129-0.png
+
+newmtl material130-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output130-0.png
+
+newmtl material131-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output131-0.png
+
+newmtl material132-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output132-0.png
+
+newmtl material133-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output133-0.png
+
+newmtl material134-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output134-0.png
+
+newmtl material135-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output135-0.png
+
+newmtl material136-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output136-0.png
+
+newmtl material137-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output137-0.png
+
+newmtl material138-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output138-0.png
+
+newmtl material139-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output139-0.png
+
+newmtl material140-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output140-0.png
+
+newmtl material141-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output141-0.png
+
+newmtl material142-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output142-0.png
+
+newmtl material143-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output143-0.png
+
+newmtl material144-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output144-0.png
+
+newmtl material145-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output145-0.png
+
+newmtl material146-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output146-0.png
+
+newmtl material147-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output147-0.png
+
+newmtl material148-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output148-0.png
+
+newmtl material149-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output149-0-alpha.png
+map_Kd output_tex/output149-0.png
+
+newmtl material150-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output150-0.png
+
+newmtl material151-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 0.000000 1.000000 0.000000 0.000000 0.000000 1.000000]
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+
+newmtl material152-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output152-0.png
+
+newmtl material153-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output153-0.png
+
+newmtl material154-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output154-0.png
+
+newmtl material155-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output155-0-alpha.png
+map_Kd output_tex/output155-0.png
+
+newmtl material156-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output156-0.png
+
+newmtl material157-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output157-0.png
+
+newmtl material158-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output158-0.png
+
+newmtl material159-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output159-0.png
+
+newmtl material160-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output160-0.png
+
+newmtl material161-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output161-0.png
+
+newmtl material162-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output162-0.png
+
+newmtl material163-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output163-0.png
+
+newmtl material164-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output164-0.png
+
+newmtl material165-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output165-0.png
+
+newmtl material166-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output166-0.png
+
+newmtl material167-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output167-0.png
+
+newmtl material168-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output168-0.png
+
+newmtl material169-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output169-0.png
+
+newmtl material170-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output170-0.png
+
+newmtl material171-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output171-0.png
+
+newmtl material172-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output172-0.png
+
+newmtl material173-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output173-0-alpha.png
+map_Kd output_tex/output173-0.png
+
+newmtl material174-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output174-0.png
+
+newmtl material175-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output175-0.png
+
+newmtl material176-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output176-0-alpha.png
+map_Kd output_tex/output176-0.png
+
+newmtl material177-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output177-0-alpha.png
+map_Kd output_tex/output177-0.png
+
+newmtl material178-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output178-0.png
+
+newmtl material179-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output179-0.png
+
+newmtl material180-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output180-0.png
+
+newmtl material181-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output181-0.png
+
+newmtl material182-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output182-0.png
+
+newmtl material183-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output183-0.png
+
+newmtl material184-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output184-0.png
+
+newmtl material185-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output185-0.png
+
+newmtl material186-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output186-0.png
+
+newmtl material187-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output187-0.png
+
+newmtl material188-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output188-0.png
+
+newmtl material189-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output189-0.png
+
+newmtl material190-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output190-0.png
+
+newmtl material191-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output191-0.png
+
+newmtl material192-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output192-0.png
+
+newmtl material193-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output193-0.png
+
+newmtl material194-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output194-0.png
+
+newmtl material195-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output195-0.png
+
+newmtl material196-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output196-0.png
+
+newmtl material197-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output197-0.png
+
+newmtl material198-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output198-0.png
+
+newmtl material199-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output199-0.png
+
+newmtl material200-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output200-0.png
+
+newmtl material201-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output201-0-alpha.png
+map_Kd output_tex/output201-0.png
+
+newmtl material202-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output202-0.png
+
+newmtl material203-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output203-0.png
+
+newmtl material204-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output204-0.png
+
+newmtl material205-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output205-0.png
+
+newmtl material206-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output206-0.png
+
+newmtl material207-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output207-0.png
+
+newmtl material208-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output208-0.png
+
+newmtl material209-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output209-0.png
+
+newmtl material210-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output210-0.png
+
+newmtl material211-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output211-0-alpha.png
+map_Kd output_tex/output211-0.png
+
+newmtl material212-0
+# blendmode=1 wrapmode=0 flags=0 uvrate=0.000000,0.300000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output212-0.png
+
+newmtl material213-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.009000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output213-0.png
+
+newmtl material214-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output214-0.png
+
+newmtl material215-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output215-0.png
+
+newmtl material216-0
+# blendmode=1 wrapmode=0 flags=0 uvrate=0.000000,0.200000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output216-0.png
+
+newmtl material217-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output217-0.png
+
+newmtl material218-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output218-0.png
+
+newmtl material219-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output219-0.png
+
+newmtl material220-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output220-0.png
+
+newmtl material221-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 0.000000 1.000000 0.000000 0.000000 0.000000 1.000000]
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+
+newmtl material222-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output222-0.png
+
+newmtl material223-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output223-0.png
+
+newmtl material224-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output224-0.png
+
+newmtl material225-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output225-0.png
+
+newmtl material226-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output226-0.png
+
+newmtl material227-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output227-0.png
+
+newmtl material228-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output228-0-alpha.png
+map_Kd output_tex/output228-0.png
+
+newmtl material229-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output229-0.png
+
+newmtl material230-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output230-0.png
+
+newmtl material231-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output231-0.png
+
+newmtl material232-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output232-0.png
+
+newmtl material233-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output233-0.png
+
+newmtl material234-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output234-0.png
+
+newmtl material235-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output235-0.png
+
+newmtl material236-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output236-0.png
+
+newmtl material237-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output237-0.png
+
+newmtl material238-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output238-0.png
+
+newmtl material239-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output239-0.png
+
+newmtl material240-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output240-0.png
+
+newmtl material241-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output241-0.png
+
+newmtl material242-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output242-0.png
+
+newmtl material243-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output243-0-alpha.png
+map_Kd output_tex/output243-0.png
+
+newmtl material244-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[8.000000 0.000000 0.000000 -0.000000 8.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.125000 0.125000 1 output_tex/output244-0.png
+
+newmtl material245-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[8.000000 0.000000 0.000000 -0.000000 8.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd 0.125000 0.125000 1 output_tex/output245-0.png
+
+newmtl material246-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output246-0-alpha.png
+map_Kd output_tex/output246-0.png
+
+newmtl material247-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output247-0.png
+
+newmtl material248-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output248-0.png
+
+newmtl material249-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output249-0.png
+
+newmtl material250-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output250-0.png
+
+newmtl material251-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output251-0.png
+
+newmtl material252-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output252-0.png
+
+newmtl material253-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output253-0.png
+
+newmtl material254-0
+# blendmode=3 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_d output_tex/output254-0-alpha.png
+map_Kd output_tex/output254-0.png
+
+newmtl material255-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output255-0.png
+
+newmtl material256-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=6
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output256-0.png
+
+newmtl material257-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output257-0.png
+
+newmtl material258-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output258-0.png
+
+newmtl material259-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output259-0.png
+
+newmtl material260-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output260-0.png
+
+newmtl material261-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output261-0.png
+
+newmtl material262-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output262-0.png
+
+newmtl material263-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output263-0.png
+
+newmtl material264-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output264-0.png
+
+newmtl material265-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output265-0.png
+
+newmtl material266-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output266-0.png
+
+newmtl material267-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output267-0.png
+
+newmtl material268-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=8
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output268-0.png
+
+newmtl material269-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output269-0.png
+
+newmtl material270-0
+# blendmode=0 wrapmode=0 flags=0 uvrate=0.000000,0.000000 uvt=[1.000000 0.000000 0.000000 -0.000000 1.000000 0.000000 0.000000 0.000000 0.000000]
+# surface depth=1 mip=7
+Ka 1.000000 1.000000 1.000000
+Kd 1 1 1
+Ks 1 1 1
+illum 1
+map_Kd output_tex/output270-0.png
+

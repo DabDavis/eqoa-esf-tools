@@ -111,15 +111,15 @@ func (m *Interp) handleJAL(target uint32) bool {
 }
 
 func (m *Interp) handleRead(name string) {
-	if m.ESF == nil {
+	r := m.Reader
+	if r == nil {
 		m.wReg32(2, -1)
 		return
 	}
 
 	switch name {
 	case "ReadBegin":
-		typ, ver, _ := m.ESF.ReadBegin()
-		// $a1 = type dest, $a2 = ver dest
+		typ, ver, _ := r.ReadBegin()
 		a1 := uint32(m.rReg(5))
 		a2 := uint32(m.rReg(6))
 		m.store16(a1, typ)
@@ -131,7 +131,7 @@ func (m *Interp) handleRead(name string) {
 		}
 
 	case "ReadBegin2":
-		typ, ver, size := m.ESF.ReadBegin()
+		typ, ver, size := r.ReadBegin()
 		a1 := uint32(m.rReg(5))
 		a2 := uint32(m.rReg(6))
 		a3 := uint32(m.rReg(7))
@@ -151,64 +151,64 @@ func (m *Interp) handleRead(name string) {
 		}
 
 	case "ReadEnd":
-		m.ESF.ReadEnd()
+		r.ReadEnd()
 		m.wReg32(2, 0)
 
 	case "ObjectVersion":
-		m.wReg32(2, int64(m.ESF.ObjectVersion()))
+		m.wReg32(2, int64(r.ObjectVersion()))
 
 	case "Read_Ri":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadInt32()
+		v := r.ReadInt32()
 		m.store32(a1, uint32(v))
 		m.wReg32(2, 0)
 
 	case "Read_RUi":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadUint32()
+		v := r.ReadUint32()
 		m.store32(a1, v)
 		m.wReg32(2, 0)
 
 	case "Read_Rf":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadFloat32()
+		v := r.ReadFloat32()
 		m.storeFloat(a1, v)
 		m.wReg32(2, 0)
 
 	case "Read_Rs":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadInt16()
+		v := r.ReadInt16()
 		m.store16(a1, uint16(v))
 		m.wReg32(2, 0)
 
 	case "Read_RUc":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadUint8()
+		v := r.ReadUint8()
 		m.store8(a1, v)
 		m.wReg32(2, 0)
 
 	case "Read_RSc":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadInt8()
+		v := r.ReadInt8()
 		m.store8(a1, byte(v))
 		m.wReg32(2, 0)
 
 	case "Read_Rc":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadUint8()
+		v := r.ReadUint8()
 		m.store8(a1, v)
 		m.wReg32(2, 0)
 
 	case "Read_RUs":
 		a1 := uint32(m.rReg(5))
-		v := m.ESF.ReadInt16()
+		v := r.ReadInt16()
 		m.store16(a1, uint16(v))
 		m.wReg32(2, 0)
 
 	case "Read_Rl":
 		a1 := uint32(m.rReg(5))
-		lo := m.ESF.ReadInt32()
-		hi := m.ESF.ReadInt32()
+		lo := r.ReadInt32()
+		hi := r.ReadInt32()
 		m.store32(a1, uint32(lo))
 		m.store32(a1+4, uint32(hi))
 		m.wReg32(2, 0)
@@ -217,7 +217,7 @@ func (m *Interp) handleRead(name string) {
 		// Bulk read: $a1=dest, $a2=count
 		a1 := uint32(m.rReg(5))
 		count := int(m.rReg(6) & 0xFFFFFFFF)
-		data := m.ESF.ReadBytes(count)
+		data := r.ReadBytes(count)
 		for i, b := range data {
 			m.store8(a1+uint32(i), b)
 		}
@@ -248,7 +248,8 @@ func RunParserV0(eeDump []byte, parserAddr uint32, objData []byte) (int32, []Rea
 	interp.Store32At(thisAddr+0x20, 0x01F90000)
 	interp.Store32At(thisAddr+0x24, 0x01FD0000)
 
-	result := interp.Run(parserAddr, esf, thisAddr)
+	interp.Reader = esf // set Reader for handleRead routing
+	result := interp.Run(parserAddr, nil, thisAddr) // nil ESF, Reader already set
 	return result, esf.Reads
 }
 

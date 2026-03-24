@@ -21,8 +21,9 @@ type Interp struct {
 	MaxSteps int
 	Verbose  bool
 
-	// ESF stream (set before Run)
-	ESF *ESFStream
+	// ESF reader — flat (ESFStream) or tree (ESFTreeStream)
+	ESF    *ESFStream    // kept for backward compat with RunParser
+	Reader ESFReader     // active reader (either ESF or tree stream)
 
 	// Stats
 	Steps       int
@@ -62,6 +63,9 @@ func (m *Interp) Reset() {
 func (m *Interp) Run(entryAddr uint32, esf *ESFStream, args ...uint32) int32 {
 	m.Reset()
 	m.ESF = esf
+	if esf != nil {
+		m.Reader = esf
+	}
 	m.pc = entryAddr
 
 	// Stack
