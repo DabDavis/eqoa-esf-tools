@@ -228,6 +228,30 @@ func (m *Interp) handleRead(name string) {
 	}
 }
 
+// RunParserV0 runs a v0 sub-parser (ParsePrimBufferObjV0, etc.) on object data.
+// The stream is pre-positioned past the 8-byte ESF header, and ReadBegin state
+// is pre-populated, matching how the parent parser calls the v0 function.
+func RunParserV0(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {
+	interp := New(eeDump)
+	esf := NewESFStream(objData)
+
+	// Pre-call ReadBegin to set up object stack (parent parser does this)
+	esf.ReadBegin()
+
+	// Set up context
+	thisAddr := uint32(0x01FE0000)
+	for i := uint32(0); i < 512; i++ {
+		interp.Store8At(thisAddr+i, 0)
+	}
+	interp.Store32At(thisAddr+0x0C, 0x01FB0000)
+	interp.Store32At(thisAddr+0x18, 0x01FA0000)
+	interp.Store32At(thisAddr+0x20, 0x01F90000)
+	interp.Store32At(thisAddr+0x24, 0x01FD0000)
+
+	result := interp.Run(parserAddr, esf, thisAddr)
+	return result, esf.Reads
+}
+
 // RunParser sets up a VIESFParse context and runs a parser function.
 // Returns the read trace from the ESF stream.
 func RunParser(eeDump []byte, parserAddr uint32, objData []byte) (int32, []ReadEntry) {

@@ -310,15 +310,13 @@ type PS2Vertex struct {
 	sb.WriteString("\tvar vertices []PS2Vertex\n\n")
 
 	// Separate v0 from v1+ variants
-	var v0trace *variantTrace
 	pbtypeTraces := map[int32]*variantTrace{} // pbtype → trace (merged across versions)
 	totalCount := 0
 
 	for _, v := range vkeys {
 		vt := variants[v]
 		if v.ver == 0 {
-			v0trace = vt
-			continue
+			continue // v0 handled by existing Go parser
 		}
 		// Merge all ver>0 by pbtype (v1 and v2+ share vertex format, differ only in dictID gate)
 		if existing, ok := pbtypeTraces[v.pbtype]; ok {
@@ -330,11 +328,13 @@ type PS2Vertex struct {
 	}
 
 	// Emit v0 path
-	if v0trace != nil && len(v0trace.reads) > 0 {
-		sb.WriteString("\tif ver == 0 {\n")
-		emitV0Body(&sb, v0trace.reads)
-		sb.WriteString("\t\treturn vertices, nil\n\t}\n\n")
-	}
+	// v0 uses nested ESF sub-objects (types 0x1300/0x1400/0x1500) that require
+	// full ESF tree navigation. The existing Go loadV0() handles this correctly.
+	// Transpiler focuses on v1+ where pbtype dispatch adds value.
+	sb.WriteString("\tif ver == 0 {\n")
+	sb.WriteString("\t\t// V0 uses nested ESF child objects — use existing loadV0()\n")
+	sb.WriteString("\t\treturn nil, fmt.Errorf(\"v0: use loadV0 instead\")\n")
+	sb.WriteString("\t}\n\n")
 
 	// Emit v1+ path with merged version gate
 	if len(pbtypeTraces) > 0 {
