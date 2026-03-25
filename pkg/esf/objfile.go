@@ -564,7 +564,15 @@ func (f *ObjFile) ensureData(pos, n int) {
 	}
 
 	buf := make([]byte, winSize)
-	nr, _ := f.fileHandle.ReadAt(buf, f.fileBase+int64(winStart))
+	// ReadAt may return short for large reads on ISO — loop until complete.
+	var nr int
+	for nr < winSize {
+		n, err := f.fileHandle.ReadAt(buf[nr:], f.fileBase+int64(winStart)+int64(nr))
+		nr += n
+		if err != nil {
+			break
+		}
+	}
 	if nr <= 0 {
 		return
 	}
