@@ -592,56 +592,71 @@ func (f *ObjFile) Pos() int {
 func (f *ObjFile) readByte() byte {
 	f.ensureData(f.pos, 1)
 	sp := f.streamPos(f.pos)
-	v := f.data[sp]
 	f.pos++
-	return v
+	if sp < 0 || sp >= len(f.data) {
+		return 0
+	}
+	return f.data[sp]
 }
 
 func (f *ObjFile) readInt16() int16 {
 	f.ensureData(f.pos, 2)
 	sp := f.streamPos(f.pos)
-	v := int16(binary.LittleEndian.Uint16(f.data[sp:]))
 	f.pos += 2
-	return v
+	if sp < 0 || sp+2 > len(f.data) {
+		return 0
+	}
+	return int16(binary.LittleEndian.Uint16(f.data[sp:]))
 }
 
 func (f *ObjFile) readUint16() uint16 {
 	f.ensureData(f.pos, 2)
 	sp := f.streamPos(f.pos)
-	v := binary.LittleEndian.Uint16(f.data[sp:])
 	f.pos += 2
-	return v
+	if sp < 0 || sp+2 > len(f.data) {
+		return 0
+	}
+	return binary.LittleEndian.Uint16(f.data[sp:])
 }
 
 func (f *ObjFile) readInt32() int32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	v := int32(binary.LittleEndian.Uint32(f.data[sp:]))
 	f.pos += 4
-	return v
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	return int32(binary.LittleEndian.Uint32(f.data[sp:]))
 }
 
 func (f *ObjFile) readUint32() uint32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	v := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
-	return v
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	return binary.LittleEndian.Uint32(f.data[sp:])
 }
 
 func (f *ObjFile) readInt64() int64 {
 	f.ensureData(f.pos, 8)
 	sp := f.streamPos(f.pos)
-	v := int64(binary.LittleEndian.Uint64(f.data[sp:]))
 	f.pos += 8
-	return v
+	if sp < 0 || sp+8 > len(f.data) {
+		return 0
+	}
+	return int64(binary.LittleEndian.Uint64(f.data[sp:]))
 }
 
 func (f *ObjFile) readFloat32() float32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	bits := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	bits := binary.LittleEndian.Uint32(f.data[sp:])
 	return float32frombits(bits)
 }
 
@@ -649,7 +664,9 @@ func (f *ObjFile) readBytes(n int) []byte {
 	f.ensureData(f.pos, n)
 	sp := f.streamPos(f.pos)
 	v := make([]byte, n)
-	copy(v, f.data[sp:sp+n])
+	if sp >= 0 && sp+n <= len(f.data) {
+		copy(v, f.data[sp:sp+n])
+	}
 	f.pos += n
 	return v
 }
