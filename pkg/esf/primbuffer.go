@@ -1,10 +1,6 @@
 package esf
 
-import (
-	"encoding/binary"
-	"fmt"
-	"math"
-)
+import "math"
 
 // matPalProvider is implemented by sprite types that can provide a MaterialPalette.
 // SimpleSprite, SimpleSubSprite, and SkinSubSprite all satisfy this interface.
@@ -71,7 +67,7 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 
 	packing1 := float32(1.0 / math.Pow(2, float64(p1)))
 	packing2 := float32(1.0 / math.Pow(2, float64(p2)))
-	packing3 := float32(1.0 / math.Pow(2, float64(p3))) // PS2: normal scaling factor
+	_ = p3 // packing3 not currently used
 
 	// Resolve preTranslations if parent is SimpleSubSprite with pretrans enabled
 	var preTranslations []Point
@@ -105,107 +101,86 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 		}
 
 		switch pbtype {
-		case 0:
-			// PS2: float vertices — pos(3×float32) + uv(2×float32) + normal(3×float32) + color(4×uint8) = 36 bytes
-			stride := int(36)
-			bulk := file.readBytes(stride * int(nverts))
-			vl.Vertices = make([]Vertex, nverts)
-			for i := int32(0); i < nverts; i++ {
-				off := int(i) * stride
-				if off+stride > len(bulk) { break }
-				d := bulk[off:]
-				px := float32frombits(binary.LittleEndian.Uint32(d[0:]))
-				py := float32frombits(binary.LittleEndian.Uint32(d[4:]))
-				pz := float32frombits(binary.LittleEndian.Uint32(d[8:]))
-				pb.BBox.Add(px, py, pz)
-				vl.Vertices[i] = Vertex{
-					X: px, Y: py, Z: pz,
-					U:  float32frombits(binary.LittleEndian.Uint32(d[12:])),
-					V:  float32frombits(binary.LittleEndian.Uint32(d[16:])),
-					NX: float32frombits(binary.LittleEndian.Uint32(d[20:])),
-					NY: float32frombits(binary.LittleEndian.Uint32(d[24:])),
-					NZ: float32frombits(binary.LittleEndian.Uint32(d[28:])),
-					R: float32(d[32]) / 255.0, G: float32(d[33]) / 255.0,
-					B: float32(d[34]) / 255.0, A: float32(d[35]) / 255.0,
-				}
-			}
-
 		case 2, 4:
-			// packed: pos(3×int16) + uv(2×int16) + normal(3×int8) + color(4×uint8) [+ vgroup(int16)]
-			stride := 17 // 10 + 3 + 4
-			if pbtype == 4 { stride = 19 } // + 2 for vgroup
-			bulk := file.readBytes(stride * int(nverts))
-			vl.Vertices = make([]Vertex, nverts)
 			for i := int32(0); i < nverts; i++ {
-				off := int(i) * stride
-				if off+stride > len(bulk) { break }
-				d := bulk[off:]
-				x := int16(binary.LittleEndian.Uint16(d[0:]))
-				y := int16(binary.LittleEndian.Uint16(d[2:]))
-				z := int16(binary.LittleEndian.Uint16(d[4:]))
-				u := int16(binary.LittleEndian.Uint16(d[6:]))
-				v := int16(binary.LittleEndian.Uint16(d[8:]))
+				x := file.readInt16()
+				y := file.readInt16()
+				z := file.readInt16()
+				u := file.readInt16()
+				v := file.readInt16()
+
+				normal := file.readBytes(3)
+				color := file.readBytes(4)
+
 				var vgroup int16
 				if pbtype == 4 {
-					vgroup = int16(binary.LittleEndian.Uint16(d[17:]))
+					vgroup = file.readInt16()
 				}
+
 				px := float32(x) * packing1
 				py := float32(y) * packing1
 				pz := float32(z) * packing1
+
 				if preTranslations != nil && int(vgroup) < len(preTranslations) {
 					px += preTranslations[vgroup].X
 					py += preTranslations[vgroup].Y
 					pz += preTranslations[vgroup].Z
 				}
+
 				pb.BBox.Add(px, py, pz)
-				vl.Vertices[i] = Vertex{
-					X: px, Y: py, Z: pz,
-					U: float32(u) * packing2, V: float32(v) * packing2,
-					NX: float32(int8(d[10])) * packing3,
-					NY: float32(int8(d[11])) * packing3,
-					NZ: float32(int8(d[12])) * packing3,
-					R: float32(d[13]) / 255.0, G: float32(d[14]) / 255.0,
-					B: float32(d[15]) / 255.0, A: float32(d[16]) / 255.0,
+
+				vtx := Vertex{
+					X:      px,
+					Y:      py,
+					Z:      pz,
+					U:      float32(u) * packing2,
+					V:      float32(v) * packing2,
+					NX:     float32(int8(normal[0])) / 127.0,
+					NY:     float32(int8(normal[1])) / 127.0,
+					NZ:     float32(int8(normal[2])) / 127.0,
+					R:      float32(color[0]) / 255.0,
+					G:      float32(color[1]) / 255.0,
+					B:      float32(color[2]) / 255.0,
+					A:      float32(color[3]) / 255.0,
 					VGroup: vgroup,
 				}
+				vl.Vertices = append(vl.Vertices, vtx)
 			}
 
 		case 5:
-			// PS2 ParseSkinPrimBufferObjV0 — same as pbtype 4 layout (19 bytes/vert)
-			stride := 19
-			bulk := file.readBytes(stride * int(nverts))
-			vl.Vertices = make([]Vertex, nverts)
 			for i := int32(0); i < nverts; i++ {
-				off := int(i) * stride
-				if off+stride > len(bulk) { break }
-				d := bulk[off:]
-				x := int16(binary.LittleEndian.Uint16(d[0:]))
-				y := int16(binary.LittleEndian.Uint16(d[2:]))
-				z := int16(binary.LittleEndian.Uint16(d[4:]))
-				u := int16(binary.LittleEndian.Uint16(d[6:]))
-				v := int16(binary.LittleEndian.Uint16(d[8:]))
-				vgroup := int16(binary.LittleEndian.Uint16(d[17:]))
+				x := file.readInt16()
+				y := file.readInt16()
+				z := file.readInt16()
+				u := file.readInt16()
+				v := file.readInt16()
+
+				normal := file.readBytes(3)
+				bones := file.readBytes(4)
+				weights := file.readBytes(4)
+
 				px := float32(x) * packing1
 				py := float32(y) * packing1
 				pz := float32(z) * packing1
-				pb.BBox.Add(px, py, pz)
-				vl.Vertices[i] = Vertex{
-					X: px, Y: py, Z: pz,
-					U: float32(u) * packing2, V: float32(v) * packing2,
-					NX: float32(int8(d[10])) * packing3,
-					NY: float32(int8(d[11])) * packing3,
-					NZ: float32(int8(d[12])) * packing3,
-					R: float32(d[13]) / 255.0, G: float32(d[14]) / 255.0,
-					B: float32(d[15]) / 255.0, A: float32(d[16]) / 255.0,
-					VGroup: vgroup,
-				}
-			}
 
-		default:
-			// PS2 ParsePrimBuffer only supports types 0, 2, 4 (type 5 is ParseSkinPrimBufferObjV0).
-			// Unknown pbtype → return error. Without this, the file position becomes misaligned
-			// and downstream reads panic with index-out-of-range.
-			return fmt.Errorf("PrimBuffer: unsupported pbtype %d (version %d)", pbtype, ver)
+				pb.BBox.Add(px, py, pz)
+
+				vtx := Vertex{
+					X:      px,
+					Y:      py,
+					Z:      pz,
+					U:      float32(u) * packing2,
+					V:      float32(v) * packing2,
+					NX:     float32(int8(normal[0])) / 127.0,
+					NY:     float32(int8(normal[1])) / 127.0,
+					NZ:     float32(int8(normal[2])) / 127.0,
+					A:      1.0,
+					VGroup: -1,
+				}
+				copy(vtx.BoneIdx[:], bones)
+				copy(vtx.BoneWeight[:], weights)
+				vl.Vertices = append(vl.Vertices, vtx)
+			}
 		}
 
 		pb.VertexLists = append(pb.VertexLists, vl)
