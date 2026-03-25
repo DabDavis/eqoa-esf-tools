@@ -62,6 +62,26 @@ func (o *ObjInfo) NextSibling() *ObjInfo {
 	return nil
 }
 
+// ReadChildData extracts the raw body bytes for an ObjInfo node.
+// Used by the VI bridge to pass raw ESF data to PS2-verified parsers.
+func (f *ObjFile) ReadChildData(info *ObjInfo) []byte {
+	if info == nil {
+		return nil
+	}
+	start := info.Offset
+	end := start + int(info.Size)
+	f.ensureData(start, end)
+	if end > len(f.data) {
+		end = len(f.data)
+	}
+	if start >= end {
+		return nil
+	}
+	out := make([]byte, end-start)
+	copy(out, f.data[start:end])
+	return out
+}
+
 // Available returns unread bytes remaining in this object's body.
 func (o *ObjInfo) Available(filePos int) int {
 	return int(o.Size) - (filePos - o.Offset)

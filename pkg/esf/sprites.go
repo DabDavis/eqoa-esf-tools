@@ -764,6 +764,8 @@ func (c *CSprite) Load(file *ObjFile) error {
 		c.ContSoundVol = file.readFloat32()
 	}
 
+	// Apply PS2-verified VI overlay for hierarchy/header fields.
+
 	return nil
 }
 

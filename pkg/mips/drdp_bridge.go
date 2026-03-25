@@ -183,6 +183,56 @@ func NewDRDPStream(data []byte) *DRDPStream {
 	return &DRDPStream{data: data}
 }
 
+// SegmentHeaderResult holds the PS2-parsed segment header fields.
+type SegmentHeaderResult struct {
+	Result int32
+	Steps  int
+	// Raw segment_header_t struct dump (first 128 bytes)
+	RawBytes [128]byte
+	// Extracted fields (populated after struct layout discovery)
+	FlagsSize uint32 // combined flags|size varint value
+	Flags     uint32
+	Size      uint32
+	Instance  uint32
+	SrcAddr   uint64
+}
+
+// RunDRDPSegmentHeader runs PS2 buffer_read_segment_header natively on segment data.
+// segmentData should be the body bytes AFTER the 4-byte endpoint header, BEFORE CRC.
+// All buffer reads run natively (no stream intercept) for full PS2 accuracy.
+func RunDRDPSegmentHeader(eeDump []byte, segmentData []byte, localEndpoint, remoteEndpoint uint16) SegmentHeaderResult {
+	interp := New(eeDump)
+	// No drdpStream — buffer reads run natively against real memory
+
+	// Put segment data into interpreter memory
+	dataBuf := interp.heapAlloc(uint32(len(segmentData)) + 16)
+	for i, b := range segmentData {
+		interp.store8(dataBuf+uint32(i), b)
+	}
+
+	// Set up buffer_t via buffer_init_read(buf, data, size, 1) @ 0x004BD130
+	bufAddr := interp.heapAlloc(256)
+	interp.RunCall(0x004BD130, bufAddr, dataBuf, uint32(len(segmentData)), 1)
+
+	// Allocate segment_header_t output struct (zeroed by heapAlloc)
+	headerAddr := interp.heapAlloc(256)
+
+	// Call buffer_read_segment_header(buf, header, local_ep, remote_ep) @ 0x004B5998
+	result := interp.RunCall(0x004B5998, bufAddr, headerAddr, uint32(localEndpoint), uint32(remoteEndpoint))
+
+	// Read back the raw header struct
+	var raw [128]byte
+	for i := 0; i < 128; i++ {
+		raw[i] = interp.load8(headerAddr + uint32(i))
+	}
+
+	return SegmentHeaderResult{
+		Result:   result,
+		Steps:    interp.Steps,
+		RawBytes: raw,
+	}
+}
+
 // RunDRDPProcess runs the PS2 DRDP packet processor on raw UDP bytes.
 // Returns the parsed field trace.
 func RunDRDPProcess(eeDump []byte, packetData []byte) DRDPResult {

@@ -140,6 +140,9 @@ func (m *Interp) RunCall(funcAddr uint32, args ...uint32) int32 {
 		}
 		insn := m.load32(m.pc)
 		if !m.exec(insn) {
+			if m.Verbose {
+				fmt.Printf("RunCall: UNHANDLED at 0x%08X: 0x%08X (step %d)\n", m.pc, insn, i)
+			}
 			break
 		}
 	}
@@ -721,10 +724,32 @@ func (m *Interp) execSpecial(rs, rt, rd, sa int, funct uint32, next uint32) bool
 		} else {
 			m.wReg32(rd, 0)
 		}
+	case 20: // DSLLV
+		m.wReg(rd, m.rReg(rt)<<(m.rReg(rs)&63))
+	case 22: // DSRLV
+		m.wReg(rd, int64(uint64(m.rReg(rt))>>(m.rReg(rs)&63)))
+	case 23: // DSRAV
+		m.wReg(rd, m.rReg(rt)>>(m.rReg(rs)&63))
+	case 44: // DADD (R5900)
+		m.wReg(rd, m.rReg(rs)+m.rReg(rt))
 	case 45: // DADDU (R5900)
 		m.wReg(rd, m.rReg(rs)+m.rReg(rt))
+	case 46: // DSUB (R5900)
+		m.wReg(rd, m.rReg(rs)-m.rReg(rt))
 	case 47: // DSUBU (R5900)
 		m.wReg(rd, m.rReg(rs)-m.rReg(rt))
+	case 56: // DSLL
+		m.wReg(rd, m.rReg(rt)<<sa)
+	case 58: // DSRL
+		m.wReg(rd, int64(uint64(m.rReg(rt))>>sa))
+	case 59: // DSRA
+		m.wReg(rd, m.rReg(rt)>>sa)
+	case 60: // DSLL32
+		m.wReg(rd, m.rReg(rt)<<(sa+32))
+	case 62: // DSRL32
+		m.wReg(rd, int64(uint64(m.rReg(rt))>>(sa+32)))
+	case 63: // DSRA32
+		m.wReg(rd, m.rReg(rt)>>(sa+32))
 	default:
 		return false
 	}
