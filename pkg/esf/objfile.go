@@ -544,14 +544,18 @@ func (f *ObjFile) ensureData(pos, n int) {
 	if pos >= f.winStart && end <= f.winEnd {
 		return // already in window
 	}
-	// Load a 256KB window centered on the requested region.
-	// This amortizes small sequential reads (e.g. parsing an object's fields).
-	const windowSize = 256 * 1024
-	winStart := pos
-	if winStart > windowSize/4 {
-		winStart -= windowSize / 4 // read a bit before pos for context
+	// Load a window that fully covers [pos, pos+n).
+	// Use at least 256KB to amortize sequential reads, but expand if n is larger.
+	const minWindow = 256 * 1024
+	needed := n
+	if needed < minWindow {
+		needed = minWindow
 	}
-	winSize := windowSize
+	winStart := pos
+	if winStart > needed/4 {
+		winStart -= needed / 4 // read a bit before pos for context
+	}
+	winSize := needed + needed/4 // extra padding after
 	if int64(winStart+winSize) > f.fileSize {
 		winSize = int(f.fileSize) - winStart
 	}
