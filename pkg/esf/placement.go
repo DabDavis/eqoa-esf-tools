@@ -78,6 +78,25 @@ func (sp *SpritePlacement) GetScale() float32 {
 	return 1
 }
 
+// ThroughActor is a group member's placement in the world: VIGroupSprite::
+// Raster's member transform times the actor's. With the heading-only rotation
+// a placement carries, that is scales multiplied, headings added, and the
+// member's offset scaled, turned and moved by the actor.
+func (sp *SpritePlacement) ThroughActor(actor *SpritePlacement) *SpritePlacement {
+	pos := sp.Pos
+	actor.Transform(&pos)
+	return &SpritePlacement{
+		Sprite:   sp.Sprite,
+		SpriteID: sp.SpriteID,
+		Pos:      pos,
+		Rot:      sp.Rot.Add(actor.Rot),
+		Scale:    sp.GetScale() * actor.GetScale(),
+		Color:    sp.Color,
+		Variant:  sp.Variant,
+		IsFlora:  sp.IsFlora,
+	}
+}
+
 // CombineWith creates a new SpritePlacement by adding another placement's
 // position and rotation to this one.
 func (sp *SpritePlacement) CombineWith(other *SpritePlacement) *SpritePlacement {

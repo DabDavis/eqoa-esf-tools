@@ -145,7 +145,11 @@ func (g *GroupSprite) Load(file *ObjFile) error {
 	}
 
 	// PS2: ParseGroupSpriteMembers (0x0043B708) reads count + per-member:
-	// DictID(4) + Pos(12) + Scale(4) + Rot(12) = 32 bytes/entry.
+	// DictID(4) + HPR(12) + Scale(4) + Translation(12) = 32 bytes/entry.
+	// CalcMemberTransform hands the first triple to VIMatrix44::Transform's
+	// angle argument and the third to its translation, whatever the decomp's
+	// member names say. Every Tunaria member's first triple is zero, and all
+	// 709 flames have their offset in the third (0, 2.956, 0 on a lamp 3 tall).
 	membersInfo := g.info.Child(TypeGroupSpriteMembers)
 	if membersInfo == nil {
 		return nil
@@ -155,9 +159,9 @@ func (g *GroupSprite) Load(file *ObjFile) error {
 	g.Placements = make([]*SpritePlacement, nmemb)
 	for i := int32(0); i < nmemb; i++ {
 		membID := file.readInt32()
-		pos := file.readPoint()
-		scale := file.readFloat32()
 		rot := file.readPoint()
+		scale := file.readFloat32()
+		pos := file.readPoint()
 		g.Placements[i] = &SpritePlacement{SpriteID: membID, Pos: pos, Rot: rot, Scale: scale}
 	}
 	return nil
@@ -187,6 +191,12 @@ type BoneNode struct {
 type HSpriteHierarchy struct {
 	info  *ObjInfo
 	Nodes []BoneNode
+	// LODDistances are the per-model animation LOD thresholds. A bone stops
+	// being animated once the camera distance passes the threshold its
+	// LODChannel selects. Only four distinct triples exist across CHAR.ESF:
+	// (5,15,40) on 491 models, (25,75,200) on 40, (10,20,40) on 30,
+	// (10,30,80) on 7.
+	LODDistances []float32
 }
 
 func (h *HSpriteHierarchy) Load(file *ObjFile) error {
@@ -194,7 +204,20 @@ func (h *HSpriteHierarchy) Load(file *ObjFile) error {
 	ver := h.info.Version
 	if ver != 0 {
 		num := file.readInt32()
-		file.skipBytes(int(num) * 4) // pre-floats
+		// These are the ANIMATION LOD DISTANCES, not padding. Three of them on
+		// all 568 retail models. VIESFParse::ParseHSpriteHierarchy (0x00435FA0)
+		// stores the count at VIHSprite+0xA8 and the floats at +0xAC, and
+		// VIHSprite::CalcLODLevelIndex (0x0044A440) compares the squared camera
+		// distance against each one squared — so they are PLAIN distances in
+		// world units. See claude-notes/csprite-writer.md.
+		if num > 0 && num < 64 {
+			h.LODDistances = make([]float32, num)
+			for i := int32(0); i < num; i++ {
+				h.LODDistances[i] = file.readFloat32()
+			}
+		} else {
+			file.skipBytes(int(num) * 4)
+		}
 	}
 	numNodes := file.readInt32()
 	h.Nodes = make([]BoneNode, numNodes)
@@ -429,8 +452,17 @@ type CSprite struct {
 	PartEmitters []CSpritePartEmitter  // bone-attached particle emitters (from 0x2960)
 	PartDefs     []*ParticleDefinition // particle definitions embedded in CSprite (from 0x2950 children)
 	SoundClips   []SoundClip           // animation-triggered sounds (from 0xB070 container)
+	SkinList     []SkinListEntry       // skin configuration entries (from 0x2900, ParseCSpriteSkinList)
+	TriggerIDs   []int32              // animation trigger refIDs (from 0x2450, ParseHSpriteTriggers)
 	ContSoundID  int32                 // continuous/ambient sound DictID (from 0x2940, 0=none)
 	ContSoundVol float32               // continuous sound volume (from 0x2940, default 1.0)
+}
+
+// SkinListEntry holds one entry from the CSprite SkinList (ESF type 0x2900).
+// PS2 ParseCSpriteSkinList at 0x00437A78: count(int32) + count × (dictID(uint32) + skinIndex(int32)).
+type SkinListEntry struct {
+	DictID    int32
+	SkinIndex int32
 }
 
 func (c *CSprite) Load(file *ObjFile) error {
@@ -552,6 +584,40 @@ func (c *CSprite) Load(file *ObjFile) error {
 					NodeIndex: file.readInt32(),
 					BoneIndex: file.readInt32(),
 				}
+			}
+		}
+	}
+
+	// Parse SkinList (skin configuration entries).
+	// PS2: ParseCSpriteSkinList (0x00437A78), tag 0x2900.
+	// Wire format: count(int32) + count × (dictID(uint32) + skinIndex(int32)).
+	skinInfo := c.info.Child(TypeCSpriteSkinList)
+	if skinInfo != nil && skinInfo.Size >= 4 {
+		file.Seek(skinInfo.Offset)
+		count := int(file.readInt32())
+		if count > 0 && count < 256 {
+			c.SkinList = make([]SkinListEntry, count)
+			for i := 0; i < count; i++ {
+				c.SkinList[i] = SkinListEntry{
+					DictID:    file.readInt32(),
+					SkinIndex: file.readInt32(),
+				}
+			}
+		}
+	}
+
+	// Parse HSpriteTriggers (animation event triggers on CSprite).
+	// PS2: ParseHSpriteTriggers (0x00436248), tag 0x2450.
+	// Wire format: count(int32) + count × refID(int32).
+	// Used for "Spell FX 1-4" animation event triggers — FindTrigger/ResetTrigger.
+	trigInfo := c.info.Child(TypeHSpriteTriggers)
+	if trigInfo != nil && trigInfo.Size >= 4 {
+		file.Seek(trigInfo.Offset)
+		count := int(file.readInt32())
+		if count > 0 && count < 256 {
+			c.TriggerIDs = make([]int32, count)
+			for i := 0; i < count; i++ {
+				c.TriggerIDs[i] = file.readInt32()
 			}
 		}
 	}
@@ -720,6 +786,8 @@ func (c *CSprite) Load(file *ObjFile) error {
 		c.ContSoundID = file.readInt32()
 		c.ContSoundVol = file.readFloat32()
 	}
+
+	// Apply PS2-verified VI overlay for hierarchy/header fields.
 
 	return nil
 }

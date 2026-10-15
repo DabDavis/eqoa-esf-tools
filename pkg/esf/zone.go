@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"log"
-	"math"
 )
 
 // ZonePreTranslations holds a list of translation vectors used to convert
@@ -222,7 +221,9 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 				continue
 			}
 			if ss, ok := obj.(*SimpleSubSprite); ok {
-				ret = append(ret, &SpritePlacement{Sprite: &ss.SimpleSprite})
+				// Rooms are drawn with static lighting (0,0,0,1)
+				// (VIScene::Render's room arm calls SetStaticLighting so).
+				ret = append(ret, &SpritePlacement{Sprite: &ss.SimpleSprite, Color: [4]byte{0, 0, 0, 255}})
 			}
 		}
 	}
@@ -285,7 +286,7 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
-					Color:   combined.Color,
+					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
 				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
@@ -306,18 +307,18 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
-					Color:   combined.Color,
+					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
 				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
 				ret = append(ret, p)
 			}
 		case *GroupSprite:
-			// GroupSprite children use their own rotation combined with actor rotation.
+			// A member is drawn through its own transform and then the actor's
+			// (VIGroupSprite::Raster: member x actor).
 			colorOff := 0
 			for _, sp := range s.GetSprites() {
-				combined := sp.CombineWith(actor.Placement)
-				combined.Rot = sp.Rot.Add(actor.Placement.Rot)
+				combined := sp.ThroughActor(actor.Placement)
 				inner, resolveErr := sp.GetSprite(file)
 				if resolveErr != nil || inner == nil {
 					continue
@@ -327,7 +328,7 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
 					Scale:   combined.Scale,
-					Color:   combined.Color,
+					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
 				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
@@ -421,11 +422,12 @@ type EffectVolumePlacement struct {
 	Pos            Point
 	BBox           Box              // world-space bounding box (local translated by actor pos)
 	EffectType     EffectVolumeType
+	HourStart      float32 // see EffectVolumeSprite
+	HourEnd        float32
+	FadeRange      float32
+	Intensity      float32
 	Density        float32
-	Speed          float32
-	SpawnOffsetY   float32
-	SpawnOffsetXZ  float32
-	Height         float32
+	Flags          uint32
 	ParticleDictID int32
 	Texture        *image.NRGBA     // particle texture from embedded Surface (nil if CSprite/missing)
 	MeshVertices   []VertexList     // mesh data from embedded CSprite (flock birds)
@@ -469,11 +471,12 @@ func (z *Zone) GetEffectVolumes(file *ObjFile) ([]EffectVolumePlacement, error) 
 			Pos:            pos,
 			BBox:           bbox,
 			EffectType:     ev.EffectType,
+			HourStart:      ev.HourStart,
+			HourEnd:        ev.HourEnd,
+			FadeRange:      ev.FadeRange,
+			Intensity:      ev.Intensity,
 			Density:        ev.Density,
-			Speed:          ev.Speed,
-			SpawnOffsetY:   ev.SpawnOffsetY,
-			SpawnOffsetXZ:  ev.SpawnOffsetXZ,
-			Height:         ev.Height,
+			Flags:          ev.Flags,
 			ParticleDictID: ev.ParticleDictID,
 			Texture:        ev.Texture,
 			MeshVertices:   ev.MeshVertices,
@@ -618,71 +621,18 @@ func (z *Zone) GetZoneParticles(file *ObjFile) ([]ZoneParticlePlacement, error) 
 			addParticleSprite(s, actor.Placement.Pos, actor.Placement.Rot, &placements)
 
 		case *GroupSprite:
-			// GroupSprites contain child placements — some may be ParticleSprites.
-			// Find sibling mesh height so we can place flame near the top.
-			var modelMaxY float32
-			for _, sp := range s.GetSprites() {
-				childObj, err := file.FindObject(sp.SpriteID)
-				if err != nil || childObj == nil {
-					continue
-				}
-				if ss, ok := childObj.(*SimpleSprite); ok {
-					if ss.BBox.MaxY > modelMaxY {
-						modelMaxY = ss.BBox.MaxY
-					}
-				}
-			}
+			// A flame is a member like any other: its offset (the third triple,
+			// e.g. 0, 2.956, 0 on a lamp 3.0 tall) through the actor's
+			// transform. This replaces a flame height guessed from the lamp's
+			// size and a "wall torch" special case.
 			for _, sp := range s.GetSprites() {
 				childObj, err := file.FindObject(sp.SpriteID)
 				if err != nil || childObj == nil {
 					continue
 				}
 				if cs, ok := childObj.(*ParticleSprite); ok {
-					// Scale flame offset based on model height:
-					// tall lamp posts (4+ units) → 90% height
-					// small candles (<1 unit) → 30% height
-					// wall torches (angled, rot.X ~1.57) → 100% (top of model)
-					// interpolate linearly between small and tall
-					var pct float32
-					if math.Abs(float64(actor.Placement.Rot.X)) > 0.5 {
-						// Wall-mounted torch — place at top
-						pct = 1.0
-					} else if modelMaxY >= 4.0 {
-						pct = 0.90
-					} else if modelMaxY <= 1.0 {
-						pct = 0.30
-					} else {
-						// lerp: 0.30 at 1.0 → 0.90 at 4.0
-						t := (modelMaxY - 1.0) / 3.0
-						pct = 0.30 + t*0.60
-					}
-					flameY := modelMaxY * pct
-					worldPos := Point{
-						X: actor.Placement.Pos.X + sp.Pos.X,
-						Y: actor.Placement.Pos.Y + sp.Pos.Y + flameY,
-						Z: actor.Placement.Pos.Z + sp.Pos.Z,
-					}
-					compositeRot := Point{
-						X: actor.Placement.Rot.X + sp.Rot.X,
-						Y: actor.Placement.Rot.Y + sp.Rot.Y,
-						Z: actor.Placement.Rot.Z + sp.Rot.Z,
-					}
-					// Wall-mounted torches: zero nozzle rotation so flame goes
-					// straight up, and offset flame to torch tip (0.5 out from wall).
-					// The torch extends along local -Z. Apply Y rotation to find
-					// the world direction.
-					if math.Abs(float64(actor.Placement.Rot.X)) > 0.5 {
-						compositeRot = Point{}
-						// Offset flame 0.5 units outward from wall.
-						// Actor rot.X sign determines which side of wall:
-						// positive → one direction, negative → opposite.
-						dir := float32(1.0)
-						if actor.Placement.Rot.X < 0 {
-							dir = -1.0
-						}
-						worldPos.Z += dir * 0.5
-					}
-					addParticleSprite(cs, worldPos, compositeRot, &placements)
+					m := sp.ThroughActor(actor.Placement)
+					addParticleSprite(cs, m.Pos, m.Rot, &placements)
 				}
 			}
 
@@ -725,37 +675,39 @@ func (w *World) ObjInfo() *ObjInfo     { return w.info }
 //
 //	origin(3f) + bboxPoint(3f) + gridX(i32) + gridZ(i32) + zoneSize(f32) + bbox2Point(3f)
 //	dictID defaults to 1, treeDepth defaults to 4.
+// WorldBaseHeader (0x8220) — VIESFParse::ParseWorldBaseHeader. The grid it
+// describes is the terrain-profile grid: NumRows x NumCols cells of CellSize,
+// each split into Subdiv x Subdiv sub-cells, laid out from Origin.
 type WorldBaseHeader struct {
-	info      *ObjInfo
-	DictID    int32
-	Origin    Point
-	BBoxPoint Point
-	GridX     int32
-	GridZ     int32
-	TreeDepth int32
-	ZoneSize  float32
-	BBox2     Point
+	info     *ObjInfo
+	NumZones int32
+	BBox     Box
+	NumRows  int32
+	NumCols  int32
+	Subdiv   int32
+	CellSize float32
+	Origin   Point
 }
 
 func (h *WorldBaseHeader) Load(file *ObjFile) error {
 	file.Seek(h.info.Offset)
 	ver := h.info.Version
 	if ver != 0 {
-		h.DictID = file.readInt32()
+		h.NumZones = file.readInt32()
 	} else {
-		h.DictID = 1
+		h.NumZones = 1
 	}
-	h.Origin = file.readPoint()
-	h.BBoxPoint = file.readPoint()
-	h.GridX = file.readInt32()
-	h.GridZ = file.readInt32()
+	h.BBox.MinX, h.BBox.MinY, h.BBox.MinZ = file.readFloat32(), file.readFloat32(), file.readFloat32()
+	h.BBox.MaxX, h.BBox.MaxY, h.BBox.MaxZ = file.readFloat32(), file.readFloat32(), file.readFloat32()
+	h.NumRows = file.readInt32()
+	h.NumCols = file.readInt32()
 	if ver != 0 {
-		h.TreeDepth = file.readInt32()
+		h.Subdiv = file.readInt32()
 	} else {
-		h.TreeDepth = 4
+		h.Subdiv = 4
 	}
-	h.ZoneSize = file.readFloat32()
-	h.BBox2 = file.readPoint()
+	h.CellSize = file.readFloat32()
+	h.Origin = file.readPoint()
 	return nil
 }
 
@@ -779,12 +731,13 @@ type WorldTree struct {
 	LeafZones []int32 // zone proxy indices referenced by leaf nodes
 }
 
-// WorldRegions maps each zone proxy to a region ID (biome/area type).
-// PS2: ParseWorldRegions (0x0043A2A8), type 0x8240.
-// One byte per zone proxy. Used for terrain profile blending (different
-// ambient/fog/sky color curves per biome).
+// WorldRegions (0x8240) is the terrain-profile grid: one profile number
+// (0..21, a VIWorld::SetProfiles entry) per sub-cell, NumRows*NumCols*Subdiv^2
+// of them, row-major in sub-cells (VIESFParse::ParseWorldRegions reads exactly
+// VIWorld::m_regions.m_size bytes). The profile blended at the camera decides
+// the fog, the overcast weight, the default sky and the ambient track.
 type WorldRegions struct {
-	RegionIDs []uint8 // one per zone proxy
+	Profiles []uint8
 }
 
 // WorldBase is a container for world spatial data (0x8200).
@@ -843,30 +796,13 @@ func (w *WorldBase) Load(file *ObjFile) error {
 		w.Tree = tree
 	}
 
-	// Parse world regions (0x8240, ver >= 2)
+	// Parse world regions (0x8240): rows*cols*subdiv^2 profile bytes.
 	regInfo := w.info.Child(TypeWorldRegions)
-	if regInfo != nil {
-		file.Seek(regInfo.Offset)
-		// PS2 reads world->numZones entries (one byte per zone proxy).
-		// Count from WorldZoneProxies or use ESF node size.
-		numProxies := int(regInfo.Size)
-		proxyInfo := w.info.Child(TypeWorldZoneProxies)
-		if proxyInfo != nil {
-			file.Seek(proxyInfo.Offset)
-			numProxies = int(file.readInt32())
+	if regInfo != nil && w.Header != nil {
+		n := int(w.Header.NumRows * w.Header.NumCols * w.Header.Subdiv * w.Header.Subdiv)
+		if n > 0 && n <= int(regInfo.Size) {
 			file.Seek(regInfo.Offset)
-		}
-		if numProxies > 0 {
-			regions := &WorldRegions{
-				RegionIDs: make([]uint8, numProxies),
-			}
-			for i := 0; i < numProxies; i++ {
-				b := file.readBytes(1)
-			if len(b) > 0 {
-				regions.RegionIDs[i] = b[0]
-			}
-			}
-			w.Regions = regions
+			w.Regions = &WorldRegions{Profiles: file.readBytes(n)}
 		}
 	}
 
@@ -1230,15 +1166,22 @@ type ZoneRoomPortal struct {
 	Vertices   []Point // portal polygon vertices (world space)
 }
 
-// ZoneRoom describes a spatial cell in an indoor zone (caves, dungeons).
-// PS2: ParseZoneRoom (0x00438CF8), VIZoneRoom::Init (0x00499850).
-// Used for portal-based visibility culling.
+// ZoneRoom describes a spatial cell of a zone — almost all of them outdoor.
+// PS2: ParseZoneRoom (0x00438CF8), VIZoneRoom::Init (0x00499850): the record
+// is (sprite DictID, palette DictID, flags). It was read as (room ID, flags,
+// unknown), which took the palette DictID for the flags.
 type ZoneRoom struct {
-	RoomID  uint32
+	SpriteID  uint32
+	PaletteID uint32
+	// Flags bit 0: outdoor. 81,172 of Tunaria's 81,773 rooms carry it, and
+	// VIWorld::RenderByPortals renders by frustum, not portals, from one.
 	Flags   uint32
 	BBox    Box
 	Portals []ZoneRoomPortal
 }
+
+// Outdoor reports the room's bit 0.
+func (r *ZoneRoom) Outdoor() bool { return r.Flags&1 != 0 }
 
 // GetZoneRooms parses all rooms from a ZoneBase's ZoneRooms container (0x3230).
 // Returns nil if the zone has no rooms (outdoor zones).
@@ -1262,9 +1205,9 @@ func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) (rooms []ZoneRoom) {
 		file.Seek(roomInfo.Offset)
 		ver := roomInfo.Version
 
-		roomID := file.readUint32()
+		spriteID := file.readUint32()
+		paletteID := file.readUint32()
 		flags := file.readUint32()
-		_ = file.readUint32() // unknown
 
 		var bbox Box
 		if ver >= 2 {
@@ -1284,12 +1227,13 @@ func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) (rooms []ZoneRoom) {
 			continue
 		}
 
-		room := ZoneRoom{RoomID: roomID, Flags: flags, BBox: bbox}
+		room := ZoneRoom{SpriteID: spriteID, PaletteID: paletteID, Flags: flags, BBox: bbox}
 
 		valid := true
 		for p := 0; p < numPortals; p++ {
-			destRoom := file.readInt32()
+			// PS2 ParseZoneRoom: reads vertCount FIRST, then destRoom.
 			numVerts := int(file.readInt32())
+			destRoom := file.readInt32()
 			if ver < 2 {
 				_ = file.readInt32() // extra field in older versions
 			}
@@ -1312,4 +1256,65 @@ func GetZoneRooms(file *ObjFile, zoneBase *ObjInfo) (rooms []ZoneRoom) {
 	}
 
 	return rooms
+}
+
+// ProfileBlend is VIWorld::CalcProfileBlend: the four terrain profiles around
+// (x, z) — the sub-cells the point falls between — and their bilinear
+// weights. It returns ok=false when the world has no profile grid.
+func (w *WorldBase) ProfileBlend(x, z float32) (idx [4]int, weight [4]float32, ok bool) {
+	h, r := w.Header, w.Regions
+	if h == nil || r == nil || h.CellSize == 0 || h.Subdiv == 0 {
+		return idx, weight, false
+	}
+	vx := x - h.Origin.X + h.CellSize*0.5
+	vz := z - h.Origin.Z + h.CellSize*0.5
+	s := float32(h.Subdiv) / h.CellSize
+	c := 1 / s
+	px := vx - c*0.5
+	pz := vz - c*0.5
+	cols := int(h.NumCols * h.Subdiv)
+	rows := int(h.NumRows * h.Subdiv)
+	// (The package's own int max() shadows the builtin here.)
+	col := int(px * s)
+	if col < 0 {
+		col = 0
+	} else if col > cols-1 {
+		col = cols - 1
+	}
+	row := int(pz * s)
+	if row < 0 {
+		row = 0
+	} else if row > rows-1 {
+		row = rows - 1
+	}
+	fx := clamp01((px - float32(col)*c) * s)
+	fz := clamp01((pz - float32(row)*c) * s)
+
+	i0 := row*cols + col
+	i1 := i0
+	if col != cols-1 {
+		i1 = i0 + 1
+	}
+	i2, i3 := i0, i1
+	if row != rows-1 {
+		i2, i3 = i0+cols, i1+cols
+	}
+	for k, i := range [4]int{i0, i1, i2, i3} {
+		if i < 0 || i >= len(r.Profiles) {
+			return idx, weight, false
+		}
+		idx[k] = int(r.Profiles[i])
+	}
+	weight = [4]float32{(1 - fx) * (1 - fz), fx * (1 - fz), (1 - fx) * fz, fx * fz}
+	return idx, weight, true
+}
+
+func clamp01(v float32) float32 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }

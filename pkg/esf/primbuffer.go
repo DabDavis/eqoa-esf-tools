@@ -38,6 +38,12 @@ type PrimBuffer struct {
 	VertexLists []VertexList
 	MatPal      *MaterialPalette
 	BBox        Box
+	// Type is the on-file packing, which is also the runtime VIPrimBufferType
+	// and so picks the VU1 program: 0 VUNC (VIRStrip), 2 PackVUNC (VIRStrip2),
+	// 4 PackVUNCG (VIRStrip3), 5 PackVUNBW (VIRStrip4), 8 PackVU (VIRStrip6).
+	// It decides what a vertex's alpha means: in 2 and 4 it gates the sun and
+	// the output alpha is 1; in 0 it is the output alpha and the sun is ungated.
+	Type int32
 }
 
 func (pb *PrimBuffer) ObjInfo() *ObjInfo { return pb.info }
@@ -58,6 +64,7 @@ func (pb *PrimBuffer) Load(file *ObjFile) error {
 	}
 
 	pbtype := file.readInt32()
+	pb.Type = pbtype
 	_ = file.readInt32() // nmats
 	nfaces := file.readInt32()
 	_ = file.readInt32() // unknown

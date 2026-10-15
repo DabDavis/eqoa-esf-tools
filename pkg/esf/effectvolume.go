@@ -45,25 +45,35 @@ func (t EffectVolumeType) String() string {
 //
 //	0xC310 (28 bytes): DictID(int32) + LocalBBox(6 floats: MinX,MinY,MinZ, MaxX,MaxY,MaxZ)
 //	0xC320 (~2088 bytes): Particle visual — contains embedded Surface (texture) or CSprite
-//	0xC330 (32-36 bytes): Effect params:
-//	  EffectType(int32) + SpawnOffsetY(f32) + SpawnOffsetXZ(f32) +
-//	  Height(f32) + Density(f32) + Speed(f32) + ParticleDictID(int32) +
-//	  CSpriteDictID(int32) + [ver>=2: ExtraDictID(int32)]
+//	0xC330 (32-36 bytes): Effect params, in ParseEffectVolumeSpriteObj's order:
+//	  type(int32), p34, p38, p30, p28, density (f32), surface DictID(int32),
+//	  sprite DictID(int32), [ver>=2: flags(uint32)]
+//
+// The names are what VIEffectVolume does with each (vieffectvolume.cpp).
 type EffectVolumeSprite struct {
-	info           *ObjInfo
-	DictID         int32
-	LocalBBox      Box              // from 0xC310, local coordinates
-	EffectType     EffectVolumeType // from 0xC330
-	SpawnOffsetY   float32          // vertical spawn offset
-	SpawnOffsetXZ  float32          // horizontal spawn offset
-	Height         float32          // volume height (usually 100)
-	Density        float32          // particle density
-	Speed          float32          // movement speed / animation rate
-	ParticleDictID int32            // references embedded texture in 0xC320 (PS2 dict type 1)
-	CSpriteDictID  int32            // references CSprite for Flock type (PS2 dict type 9)
-	ExtraDictID    int32            // ver >= 2: stored at VIEffectVolume+0x3C (flags)
-	Texture        *image.NRGBA     // particle texture extracted from 0xC320 Surface child
-	MeshVertices   []VertexList     // mesh data from 0xC320 CSprite child (flock birds)
+	info       *ObjInfo
+	DictID     int32
+	LocalBBox  Box              // from 0xC310, local coordinates
+	EffectType EffectVolumeType // from 0xC330
+	// HourStart and HourEnd (m_p34, m_p38) bound the hours the volume shows,
+	// with a five-minute ramp either side; [0, 0] is always. 110 Tunaria fog
+	// volumes are [18, 7.75] — night only.
+	HourStart float32
+	HourEnd   float32
+	// FadeRange (m_p30): full strength within 0.75 of it from the camera,
+	// nothing beyond it. 100 in every Tunaria volume.
+	FadeRange float32
+	// Intensity (m_p28): the fog and dust alpha, the dust card size and life,
+	// and the falling leaves' life.
+	Intensity float32
+	// Density (m_density): the particle count, and the (1-d)/2 + 1/2 alpha
+	// factor of fog, dust and light shafts.
+	Density        float32
+	ParticleDictID int32        // m_surface: embedded texture in 0xC320 (PS2 dict type 1)
+	CSpriteDictID  int32        // m_sprite: the flock's bird (PS2 dict type 9)
+	Flags          uint32       // ver >= 2, m_flags: bit 1 = light shafts follow a 9-15 h schedule and lean
+	Texture        *image.NRGBA // particle texture extracted from 0xC320 Surface child
+	MeshVertices   []VertexList // mesh data from 0xC320 CSprite child (flock birds)
 }
 
 func (e *EffectVolumeSprite) Load(file *ObjFile) error {
@@ -78,24 +88,23 @@ func (e *EffectVolumeSprite) Load(file *ObjFile) error {
 		}
 	}
 
-	// Child 0xC330: effect parameters.
-	// PS2 reads: EffectType(i32) + 5 floats + ParticleDictID(i32) + CSpriteDictID(i32)
-	// + [ver>=2: ExtraDictID via ReadDictID]
+	// Child 0xC330: effect parameters, read in ParseEffectVolumeSpriteObj's
+	// order (viesfparse.cpp): t, p34, p38, p30, p28, density, surf, spr, [flags].
 	params := e.info.Child(TypeEffectVolumeParams)
 	if params != nil {
 		file.Seek(params.Offset)
 		if params.Size >= 32 {
 			e.EffectType = EffectVolumeType(file.readInt32())
-			e.SpawnOffsetY = file.readFloat32()
-			e.SpawnOffsetXZ = file.readFloat32()
-			e.Height = file.readFloat32()
+			e.HourStart = file.readFloat32()
+			e.HourEnd = file.readFloat32()
+			e.FadeRange = file.readFloat32()
+			e.Intensity = file.readFloat32()
 			e.Density = file.readFloat32()
-			e.Speed = file.readFloat32()
 			e.ParticleDictID = file.readInt32()
 			e.CSpriteDictID = file.readInt32()
 		}
 		if params.Version >= 2 && params.Size >= 36 {
-			e.ExtraDictID = file.readInt32()
+			e.Flags = uint32(file.readInt32())
 		}
 	}
 
@@ -153,8 +162,8 @@ func (e *EffectVolumeSprite) Load(file *ObjFile) error {
 	if len(e.MeshVertices) > 0 {
 		texSize += " mesh=CSprite"
 	}
-	log.Printf("esf: EffectVolumeSprite dictID=0x%08x type=%s density=%.2f speed=%.2f%s bbox=(%.1f,%.1f,%.1f)-(%.1f,%.1f,%.1f)",
-		uint32(e.DictID), e.EffectType, e.Density, e.Speed, texSize,
+	log.Printf("esf: EffectVolumeSprite dictID=0x%08x type=%s intensity=%.2f density=%.2f hours=[%.2f,%.2f]%s bbox=(%.1f,%.1f,%.1f)-(%.1f,%.1f,%.1f)",
+		uint32(e.DictID), e.EffectType, e.Intensity, e.Density, e.HourStart, e.HourEnd, texSize,
 		e.LocalBBox.MinX, e.LocalBBox.MinY, e.LocalBBox.MinZ,
 		e.LocalBBox.MaxX, e.LocalBBox.MaxY, e.LocalBBox.MaxZ)
 

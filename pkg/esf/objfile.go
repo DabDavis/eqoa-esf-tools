@@ -62,6 +62,26 @@ func (o *ObjInfo) NextSibling() *ObjInfo {
 	return nil
 }
 
+// ReadChildData extracts the raw body bytes for an ObjInfo node.
+// Used by the VI bridge to pass raw ESF data to PS2-verified parsers.
+func (f *ObjFile) ReadChildData(info *ObjInfo) []byte {
+	if info == nil {
+		return nil
+	}
+	start := info.Offset
+	end := start + int(info.Size)
+	f.ensureData(start, end)
+	if end > len(f.data) {
+		end = len(f.data)
+	}
+	if start >= end {
+		return nil
+	}
+	out := make([]byte, end-start)
+	copy(out, f.data[start:end])
+	return out
+}
+
 // Available returns unread bytes remaining in this object's body.
 func (o *ObjInfo) Available(filePos int) int {
 	return int(o.Size) - (filePos - o.Offset)
@@ -524,14 +544,18 @@ func (f *ObjFile) ensureData(pos, n int) {
 	if pos >= f.winStart && end <= f.winEnd {
 		return // already in window
 	}
-	// Load a 256KB window centered on the requested region.
-	// This amortizes small sequential reads (e.g. parsing an object's fields).
-	const windowSize = 256 * 1024
-	winStart := pos
-	if winStart > windowSize/4 {
-		winStart -= windowSize / 4 // read a bit before pos for context
+	// Load a window that fully covers [pos, pos+n).
+	// Use at least 256KB to amortize sequential reads, but expand if n is larger.
+	const minWindow = 256 * 1024
+	needed := n
+	if needed < minWindow {
+		needed = minWindow
 	}
-	winSize := windowSize
+	winStart := pos
+	if winStart > needed/4 {
+		winStart -= needed / 4 // read a bit before pos for context
+	}
+	winSize := needed + needed/4 // extra padding after
 	if int64(winStart+winSize) > f.fileSize {
 		winSize = int(f.fileSize) - winStart
 	}
@@ -540,7 +564,15 @@ func (f *ObjFile) ensureData(pos, n int) {
 	}
 
 	buf := make([]byte, winSize)
-	nr, _ := f.fileHandle.ReadAt(buf, f.fileBase+int64(winStart))
+	// ReadAt may return short for large reads on ISO — loop until complete.
+	var nr int
+	for nr < winSize {
+		n, err := f.fileHandle.ReadAt(buf[nr:], f.fileBase+int64(winStart)+int64(nr))
+		nr += n
+		if err != nil {
+			break
+		}
+	}
 	if nr <= 0 {
 		return
 	}
@@ -568,56 +600,71 @@ func (f *ObjFile) Pos() int {
 func (f *ObjFile) readByte() byte {
 	f.ensureData(f.pos, 1)
 	sp := f.streamPos(f.pos)
-	v := f.data[sp]
 	f.pos++
-	return v
+	if sp < 0 || sp >= len(f.data) {
+		return 0
+	}
+	return f.data[sp]
 }
 
 func (f *ObjFile) readInt16() int16 {
 	f.ensureData(f.pos, 2)
 	sp := f.streamPos(f.pos)
-	v := int16(binary.LittleEndian.Uint16(f.data[sp:]))
 	f.pos += 2
-	return v
+	if sp < 0 || sp+2 > len(f.data) {
+		return 0
+	}
+	return int16(binary.LittleEndian.Uint16(f.data[sp:]))
 }
 
 func (f *ObjFile) readUint16() uint16 {
 	f.ensureData(f.pos, 2)
 	sp := f.streamPos(f.pos)
-	v := binary.LittleEndian.Uint16(f.data[sp:])
 	f.pos += 2
-	return v
+	if sp < 0 || sp+2 > len(f.data) {
+		return 0
+	}
+	return binary.LittleEndian.Uint16(f.data[sp:])
 }
 
 func (f *ObjFile) readInt32() int32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	v := int32(binary.LittleEndian.Uint32(f.data[sp:]))
 	f.pos += 4
-	return v
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	return int32(binary.LittleEndian.Uint32(f.data[sp:]))
 }
 
 func (f *ObjFile) readUint32() uint32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	v := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
-	return v
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	return binary.LittleEndian.Uint32(f.data[sp:])
 }
 
 func (f *ObjFile) readInt64() int64 {
 	f.ensureData(f.pos, 8)
 	sp := f.streamPos(f.pos)
-	v := int64(binary.LittleEndian.Uint64(f.data[sp:]))
 	f.pos += 8
-	return v
+	if sp < 0 || sp+8 > len(f.data) {
+		return 0
+	}
+	return int64(binary.LittleEndian.Uint64(f.data[sp:]))
 }
 
 func (f *ObjFile) readFloat32() float32 {
 	f.ensureData(f.pos, 4)
 	sp := f.streamPos(f.pos)
-	bits := binary.LittleEndian.Uint32(f.data[sp:])
 	f.pos += 4
+	if sp < 0 || sp+4 > len(f.data) {
+		return 0
+	}
+	bits := binary.LittleEndian.Uint32(f.data[sp:])
 	return float32frombits(bits)
 }
 
@@ -625,7 +672,9 @@ func (f *ObjFile) readBytes(n int) []byte {
 	f.ensureData(f.pos, n)
 	sp := f.streamPos(f.pos)
 	v := make([]byte, n)
-	copy(v, f.data[sp:sp+n])
+	if sp >= 0 && sp+n <= len(f.data) {
+		copy(v, f.data[sp:sp+n])
+	}
 	f.pos += n
 	return v
 }
