@@ -41,6 +41,10 @@ var isoFileTable = map[string]isoFileEntry{
 	// Audio ESF files
 	"AMBTRACK.ESF": {Sector: 2331, Size: 2532489, IsCSF: false},
 
+	// The game's string table: string id N is line N (UTF-8, CRLF). A patch
+	// server may replace it (Sandstorm serves its own WORDS.TXT to the card).
+	"WORDS.TXT": {Sector: 76030, Size: 43826, IsCSF: false},
+
 	// World ESF files (other continents, uncompressed)
 	"ODUS.ESF":     {Sector: 1006934, Size: 192453151, IsCSF: false},
 	"RATHE.ESF":    {Sector: 1110589, Size: 99410791, IsCSF: false},
