@@ -223,18 +223,18 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 			if ss, ok := obj.(*SimpleSubSprite); ok {
 				// Rooms are drawn with static lighting (0,0,0,1)
 				// (VIScene::Render's room arm calls SetStaticLighting so).
-				ret = append(ret, &SpritePlacement{Sprite: &ss.SimpleSprite, Color: [4]byte{0, 0, 0, 255}})
+				ret = append(ret, &SpritePlacement{Sprite: &ss.SimpleSprite, Color: [4]byte{0, 0, 0, 255}, IsRoom: true})
 			}
 		}
 	}
 
 	// Load baked static lighting and build lookup map.
-	bakedMap := map[int64][]Color32{} // key = roomID<<32 | actorIndex
+	bakedMap := map[int64][][]Color32{} // key = roomID<<32 | actorIndex
 	lighting, _ := z.GetStaticLighting(file)
 	for _, rsl := range lighting {
 		for _, entry := range rsl.Entries {
 			key := int64(rsl.RoomIndex)<<32 | int64(entry.ActorIndex)
-			bakedMap[key] = entry.Colors
+			bakedMap[key] = entry.Buffers
 		}
 	}
 
@@ -255,7 +255,13 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 	for _, rae := range actorsWithRooms {
 		actor := rae.Actor
 		bakedKey := int64(rae.RoomID)<<32 | int64(rae.ActorIndex)
-		actorColors := bakedMap[bakedKey]
+		buffers := bakedMap[bakedKey]
+		// A sprite drawn directly takes the first buffer; a LOD sprite's
+		// level 0 does too (the others belong to the farther levels).
+		var actorColors []Color32
+		if len(buffers) > 0 {
+			actorColors = buffers[0]
+		}
 
 		obj, err := file.FindObject(actor.Placement.SpriteID)
 		if err != nil {
@@ -269,7 +275,9 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 		// GroupSprite, since Go type switches match the concrete type only.
 		switch s := obj.(type) {
 		case *HSprite:
-			// HSprite uses relative rotation: add zone actor rotation.
+			// The children carry no transform of their own, so they take the
+			// actor's — its scale included (464 Tunaria HSprite actors are
+			// scaled; a child's zero scale read as 1).
 			sprites, loadErr := s.LoadSprites(file)
 			if loadErr != nil {
 				continue
@@ -285,11 +293,12 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Sprite:  inner,
 					Pos:     combined.Pos,
 					Rot:     combined.Rot,
-					Scale:   combined.Scale,
+					Scale:   actor.Placement.Scale,
 					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
-				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				childBakedColors(p, inner, file, buffers, colorOff)
+				colorOff++
 				ret = append(ret, p)
 			}
 		case *CSprite:
@@ -310,7 +319,8 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
-				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				childBakedColors(p, inner, file, buffers, colorOff)
+				colorOff++
 				ret = append(ret, p)
 			}
 		case *GroupSprite:
@@ -331,7 +341,8 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 					Color:   actor.Placement.Color, // the actor's static lighting covers its whole tree
 					IsFlora: sp.IsFlora,
 				}
-				colorOff = splitBakedColors(p, inner, file, actorColors, colorOff)
+				childBakedColors(p, inner, file, buffers, colorOff)
+				colorOff++
 				ret = append(ret, p)
 			}
 		case *LODSprite:
@@ -396,30 +407,33 @@ func (z *Zone) GetSpritePlacements(file *ObjFile) ([]*SpritePlacement, error) {
 }
 
 // EffectVolumePlacement describes a placed effect volume in a zone.
-// splitBakedColors assigns a slice of actorColors to sp based on the vertex
-// count of the sprite's PrimBuffer. Returns the updated color offset.
-func splitBakedColors(sp *SpritePlacement, sprite *SimpleSprite, file *ObjFile, actorColors []Color32, offset int) int {
-	if len(actorColors) == 0 {
-		return offset
+// childBakedColors gives a composite's child j its own ColorBuffer, j: the
+// scene hands the buffers out one per simple sprite drawn, in order
+// (VIScene::GetNextColorBuffer). A child past the last buffer has none. In
+// Tunaria buffer j fits child j's vertex count in all 524 lit HSprites; the
+// old code sliced buffer 0 across the children, which left children 1 and up
+// of the 287 with more than one buffer unlit.
+func childBakedColors(sp *SpritePlacement, sprite *SimpleSprite, file *ObjFile, buffers [][]Color32, j int) {
+	if j >= len(buffers) || len(buffers[j]) == 0 {
+		return
 	}
 	pb, err := sprite.GetPrimBuffer(file)
 	if err != nil || pb == nil {
-		return offset
+		return
 	}
 	verts := 0
 	for _, vl := range pb.VertexLists {
 		verts += len(vl.Vertices)
 	}
-	end := offset + verts
-	if end > len(actorColors) {
-		return offset
+	if verts == len(buffers[j]) {
+		sp.BakedColors = buffers[j]
 	}
-	sp.BakedColors = actorColors[offset:end]
-	return end
 }
 
 type EffectVolumePlacement struct {
 	Pos            Point
+	Rot            Point   // the actor's HPR (heading, pitch, roll)
+	Scale          float32 // the actor's scale (GetScale: 1 when unset)
 	BBox           Box              // world-space bounding box (local translated by actor pos)
 	EffectType     EffectVolumeType
 	HourStart      float32 // see EffectVolumeSprite
@@ -469,6 +483,8 @@ func (z *Zone) GetEffectVolumes(file *ObjFile) ([]EffectVolumePlacement, error) 
 
 		volumes = append(volumes, EffectVolumePlacement{
 			Pos:            pos,
+			Rot:            actor.Placement.Rot,
+			Scale:          actor.Placement.GetScale(),
 			BBox:           bbox,
 			EffectType:     ev.EffectType,
 			HourStart:      ev.HourStart,
@@ -912,8 +928,13 @@ func (z *ZoneStaticTable) Load(file *ObjFile) error {
 type StaticLightingEntry struct {
 	ActorIndex int32     // index into the room's actor list (from StaticLightingObj)
 	Flags      int32     // typically 1
-	Colors     []Color32 // per-vertex RGBA baked lighting
+	Colors     []Color32 // per-vertex RGBA baked lighting (Buffers[0])
 	DictID     int32     // ColorBuffer DictID
+	// Buffers is every ColorBuffer, in order: VIStaticLighting::m_buffers.
+	// The scene hands them out one per simple sprite drawn under the actor
+	// (VIScene::GetNextColorBuffer), so a group's or an HSprite's child j
+	// takes buffer j.
+	Buffers [][]Color32
 }
 
 // RoomStaticLighting holds all baked lighting for a room.
@@ -967,16 +988,19 @@ func (z *Zone) GetStaticLighting(file *ObjFile) ([]RoomStaticLighting, error) {
 				}
 			}
 
-			// ColorBuffer — take the first one (multiple are variants)
+			// Every ColorBuffer, in order (ParseStaticLightingObj reads n).
 			for _, cbInfo := range slInfo.ChildrenOfType(TypeColorBuffer) {
 				obj, err := file.GetObject(cbInfo)
 				if err != nil || obj == nil {
+					entry.Buffers = append(entry.Buffers, nil)
 					continue
 				}
 				cb := obj.(*ColorBuffer)
-				entry.Colors = cb.Colors
-				entry.DictID = cb.DictID
-				break // use first ColorBuffer
+				if entry.Colors == nil {
+					entry.Colors = cb.Colors
+					entry.DictID = cb.DictID
+				}
+				entry.Buffers = append(entry.Buffers, cb.Colors)
 			}
 
 			if len(entry.Colors) > 0 {

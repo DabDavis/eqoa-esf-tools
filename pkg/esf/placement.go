@@ -35,6 +35,7 @@ type SpritePlacement struct {
 	Variant     *VariantTag // nil = base mesh (always drawn)
 	IsFlora     bool        // true for FloraSprite actors (rendered separately with alpha blending)
 	BakedColors []Color32   // per-vertex baked lighting (nil if none)
+	IsRoom      bool        // a zone room's own geometry, not an actor's
 }
 
 // GetSprite resolves the sprite, either from the direct reference or by
@@ -70,6 +71,12 @@ func (sp *SpritePlacement) Transform(p *Point) {
 	p.AddTo(sp.Pos)
 }
 
+// TransformNormal turns a normal by the placement's rotation. The scale is
+// uniform, so it leaves a direction alone.
+func (sp *SpritePlacement) TransformNormal(n *Point) {
+	n.Rotate(sp.Rot)
+}
+
 // GetScale returns the placement scale, defaulting to 1 if non-positive.
 func (sp *SpritePlacement) GetScale() float32 {
 	if sp.Scale > 0 {
@@ -79,9 +86,11 @@ func (sp *SpritePlacement) GetScale() float32 {
 }
 
 // ThroughActor is a group member's placement in the world: VIGroupSprite::
-// Raster's member transform times the actor's. With the heading-only rotation
-// a placement carries, that is scales multiplied, headings added, and the
-// member's offset scaled, turned and moved by the actor.
+// Raster's member transform times the actor's. A member's HPR is zero in
+// every group sprite of all six worlds, so the product is exact as scales
+// multiplied, the actor's rotation, and the member's offset scaled, turned
+// and moved by the actor. Adding the two HPRs would not compose a member
+// that had one.
 func (sp *SpritePlacement) ThroughActor(actor *SpritePlacement) *SpritePlacement {
 	pos := sp.Pos
 	actor.Transform(&pos)

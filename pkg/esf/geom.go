@@ -36,13 +36,23 @@ func (p *Point) Negate() {
 	p.Z = -p.Z
 }
 
+// Rotate turns p by an HPR the way VIMatrix44::Transform (vimatrix44.cpp:394)
+// builds an actor's matrix (VIActor::CalcObjectToWorld): rot.X is the
+// heading, rot.Y the pitch and rot.Z the roll, and the matrix multiplies a
+// ROW vector. With pitch and roll at 0 it is the turn about Y this used to
+// be, and that is all it did: 19,888 Tunaria actors have a pitch or a roll.
 func (p *Point) Rotate(rot Point) {
-	sin := float32(math.Sin(float64(rot.X)))
-	cos := float32(math.Cos(float64(rot.X)))
-	rx := p.Z*sin + p.X*cos
-	rz := p.Z*cos - p.X*sin
-	p.X = rx
-	p.Z = rz
+	si, ci := sincos32(rot.X)
+	sj, cj := sincos32(rot.Y)
+	sh, ch := sincos32(rot.Z)
+	x, y, z := p.X, p.Y, p.Z
+	p.X = x*(ch*ci+sh*sj*si) + y*(-sh*ci+ch*sj*si) + z*(cj*si)
+	p.Y = x*(sh*cj) + y*(ch*cj) + z*(-sj)
+	p.Z = x*(-ch*si+sh*sj*ci) + y*(sh*si+ch*sj*ci) + z*(cj*ci)
+}
+
+func sincos32(a float32) (float32, float32) {
+	return float32(math.Sin(float64(a))), float32(math.Cos(float64(a)))
 }
 
 type Box struct {

@@ -10,9 +10,11 @@ import (
 // PS2: ParseFontObj (0x0043A830), type 0x7000.
 // Children: 0x7010 (header), 0x7020 (display widths), 0x7030 (CLUT + per-char pixel data).
 //
-// 0x7030 layout:
-//   [8-byte header] [CLUT: 255 RGBA entries = 1020 bytes]
-//   [per-char × numChars: charCode(u16) + rowBytes(i32) + rowBytes*charHeight pixels (8-bit alpha)]
+// 0x7030 layout (VIESFParse::ParseFontObj, viesfparse.cpp:4173):
+//   depth 0 or 1 only: palCount(i32) + palCount RGBA entries
+//   per char × numChars: charCode(u16) + n(i32) + charHeight rows of n bytes.
+// Depth 0 is 4 bits a pixel, low nibble first (Convert4); depth 1 is a byte.
+// ARIAL.CSF is depth 1 with 256 entries, ARIALUI.CSF depth 0 with 16.
 type Font struct {
 	info       *ObjInfo
 	DictID     uint32
@@ -20,14 +22,17 @@ type Font struct {
 	CharHeight int
 	BitDepth   int
 	Widths     []byte // display widths per char (from 0x7020)
-	Glyphs     []FontGlyph
+	// Palette is the CLUT the glyph pixels index. ARIAL's entry 1 is an
+	// opaque grey (128,128,128,255), the outline, and entry 2 white.
+	Palette []color.NRGBA
+	Glyphs  []FontGlyph
 }
 
 // FontGlyph holds one character's bitmap data.
 type FontGlyph struct {
 	CharCode uint16
-	RowBytes int // pixel width = bytes per row (8-bit alpha)
-	Pixels   []byte // rowBytes * charHeight bytes, row-major 8-bit alpha
+	RowBytes int    // pixels per row (a 4-bit glyph is expanded to one byte a pixel)
+	Pixels   []byte // RowBytes * charHeight palette indices, row-major
 }
 
 func (f *Font) ObjInfo() *ObjInfo { return f.info }
@@ -55,12 +60,24 @@ func (f *Font) Load(file *ObjFile) error {
 		return nil
 	}
 	pxData := file.RawBytes(int(px.Offset), int(px.Size))
-	if len(pxData) < 1028 {
-		return nil
+	offset := 0
+	if f.BitDepth == 0 || f.BitDepth == 1 {
+		if len(pxData) < 4 {
+			return nil
+		}
+		n := int(binary.LittleEndian.Uint32(pxData))
+		offset = 4 + n*4
+		if n < 0 || offset > len(pxData) {
+			return nil
+		}
+		f.Palette = make([]color.NRGBA, n)
+		for i := range f.Palette {
+			c := pxData[4+i*4:]
+			f.Palette[i] = color.NRGBA{c[0], c[1], c[2], c[3]}
+		}
+	} else {
+		return nil // direct colour: no shipped font uses it
 	}
-
-	// Skip 8-byte header + 1020-byte CLUT (255 RGBA entries)
-	offset := 1028
 
 	f.Glyphs = make([]FontGlyph, 0, f.NumChars)
 	for i := 0; i < f.NumChars && offset+6 <= len(pxData); i++ {
@@ -72,14 +89,33 @@ func (f *Font) Load(file *ObjFile) error {
 			break
 		}
 
-		size := rowBytes * f.CharHeight
-		g := FontGlyph{
-			CharCode: charCode,
-			RowBytes: rowBytes,
-			Pixels:   make([]byte, size),
+		g := FontGlyph{CharCode: charCode, RowBytes: rowBytes}
+		if f.BitDepth == 0 {
+			// Convert4 into an I8 store: the char's width in pixels, two
+			// a byte, low nibble first.
+			w := rowBytes * 2
+			if i < len(f.Widths) && int(f.Widths[i]) <= w {
+				w = int(f.Widths[i])
+			}
+			g.RowBytes = w
+			g.Pixels = make([]byte, w*f.CharHeight)
+			for y := 0; y < f.CharHeight; y++ {
+				row := pxData[offset+y*rowBytes:]
+				for x := 0; x < w; x++ {
+					b := row[x>>1]
+					if x&1 == 0 {
+						b &= 0x0F
+					} else {
+						b >>= 4
+					}
+					g.Pixels[y*w+x] = b
+				}
+			}
+		} else {
+			g.Pixels = make([]byte, rowBytes*f.CharHeight)
+			copy(g.Pixels, pxData[offset:])
 		}
-		copy(g.Pixels, pxData[offset:offset+size])
-		offset += size
+		offset += rowBytes * f.CharHeight
 
 		f.Glyphs = append(f.Glyphs, g)
 	}
@@ -97,7 +133,7 @@ func (f *Font) GlyphByCode(code uint16) *FontGlyph {
 	return nil
 }
 
-// GlyphImage extracts a single glyph as an alpha image.
+// GlyphImage extracts a single glyph's palette indices as an alpha image.
 func (f *Font) GlyphImage(charCode uint16) *image.Alpha {
 	g := f.GlyphByCode(charCode)
 	if g == nil || g.RowBytes == 0 {
@@ -156,14 +192,10 @@ func (f *Font) Atlas() (*image.NRGBA, map[uint16]GlyphRect) {
 
 		for y := 0; y < f.CharHeight; y++ {
 			for x := 0; x < g.RowBytes; x++ {
-				v := g.Pixels[y*g.RowBytes+x]
-				if v > 0 {
-					// 0=transparent, 1=semi-opaque, 2=fully opaque
-					a := uint8(255)
-					if v == 1 {
-						a = 128
-					}
-					img.Set(x0+x, y0+y, color.NRGBA{255, 255, 255, a})
+				// The palette's own colour: ARIAL's 1 is an opaque grey
+				// outline, not a half-transparent white.
+				if v := int(g.Pixels[y*g.RowBytes+x]); v < len(f.Palette) {
+					img.Set(x0+x, y0+y, f.Palette[v])
 				}
 			}
 		}
