@@ -291,3 +291,14 @@ go build ./cmd/...
 ## Dependencies
 
 None — Go stdlib only.
+
+## Sharing back
+
+Fixes and new readers sent back here help every project built on these tools: a pull request
+is welcome. Credit is appreciated, not required; contributions are taken under the same
+licence.
+
+## License
+
+MIT (`LICENSE`), for this repository's own work. It grants no rights in *EverQuest Online
+Adventures* or its files: the tools read a disc you own.
