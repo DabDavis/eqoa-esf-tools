@@ -295,10 +295,16 @@ None — Go stdlib only.
 ## Sharing back
 
 Fixes and new readers sent back here help every project built on these tools: a pull request
-is welcome. Credit is appreciated, not required; contributions are taken under the same
-licence.
+is welcome. Contributions are taken under the same licence.
 
 ## License
 
-MIT (`LICENSE`), for this repository's own work. It grants no rights in *EverQuest Online
-Adventures* or its files: the tools read a disc you own.
+GNU Affero General Public License, version 3 or (at your option) any later version
+(`LICENSE`), for this repository's own work. If you hand out a changed copy, or run one for
+others over a network, they have to be offered its source.
+
+Commits up to `df9cb87` (2026-11-07) were released under the MIT licence and stay available under
+it at those commits; `NOTICE` keeps its notice for the code they hold.
+
+The licence grants no rights in *EverQuest Online Adventures* or its files: the tools read a disc
+you own.
